@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1800" viewBox="0 0 1080 1800" role="img" aria-labelledby="title desc">
+  <title id="title">Two Nano self-balancing patrol bot wiring guide</title>
+  <desc id="desc">Portrait wiring reference for balance and sensor Nano controllers, motor driver, BMI160, two VL53L0X floor sensors, RCWL-9610 ultrasonic sensor, HC-05 Bluetooth, and reroutable pins.</desc>
+  <defs>
+    <style>
+      text { font-family: Arial, Helvetica, sans-serif; fill: #183044; }
+      .title { font-size: 34px; font-weight: 700; }
+      .subtitle { font-size: 19px; fill: #456071; }
+      .section { font-size: 23px; font-weight: 700; }
+      .cardtitle { font-size: 21px; font-weight: 700; }
+      .body { font-size: 17px; }
+      .small { font-size: 15px; fill: #456071; }
+      .pin { font-size: 17px; font-weight: 700; }
+      .tag { font-size: 14px; font-weight: 700; letter-spacing: 0.4px; }
+      .muted { fill: #607786; }
+      .blue { fill: #1769AA; }
+      .green { fill: #15806A; }
+      .orange { fill: #B75C1B; }
+      .red { fill: #B64040; }
+      .card { fill: #FFFFFF; stroke: #D7E1E7; stroke-width: 2; }
+      .rule { stroke: #D7E1E7; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1800" fill="#F1F5F7"/>
+  <rect x="0" y="0" width="1080" height="132" fill="#E5EEF3"/>
+  <text x="42" y="56" class="title">TWO NANO PATROL BOT</text>
+  <text x="44" y="91" class="subtitle">Phone-friendly wiring reference | Classic Arduino Nano / ATmega328P</text>
+  <rect x="850" y="35" width="190" height="46" rx="23" fill="#183044"/>
+  <text x="945" y="64" text-anchor="middle" class="tag" fill="#FFFFFF" style="fill:#FFFFFF">NO DISPLAY MODULE</text>
+
+  <rect x="36" y="154" width="496" height="500" rx="18" class="card"/>
+  <rect x="36" y="154" width="496" height="58" rx="18" fill="#DCECF8"/>
+  <text x="60" y="192" class="cardtitle blue">NANO A | BALANCE + MOTORS</text>
+  <text x="60" y="240" class="small">TB6612FNG control</text>
+  <text x="60" y="276" class="pin">D5  - PWMA (PWM)</text>
+  <text x="60" y="308" class="pin">D2  - AIN1</text>
+  <text x="60" y="340" class="pin">D3  - AIN2</text>
+  <text x="60" y="372" class="pin">D6  - PWMB (PWM)</text>
+  <text x="60" y="404" class="pin">D4  - BIN1</text>
+  <text x="60" y="436" class="pin">D7  - BIN2</text>
+  <text x="60" y="468" class="pin">D8  - STBY</text>
+  <line x1="60" y1="488" x2="508" y2="488" class="rule"/>
+  <text x="60" y="518" class="pin">D12 - Active buzzer signal</text>
+  <text x="60" y="550" class="pin">D13 - Onboard LED, held HIGH</text>
+  <text x="60" y="582" class="pin">A4/A5 - BMI160 I2C SDA/SCL</text>
+  <text x="60" y="614" class="pin">GY-BMI160 SAO to GND = address 0x68</text>
+  <text x="60" y="641" class="pin">D0/D1 - UART link RX/TX</text>
+
+  <rect x="548" y="154" width="496" height="500" rx="18" class="card"/>
+  <rect x="548" y="154" width="496" height="58" rx="18" fill="#DDF1E9"/>
+  <text x="572" y="192" class="cardtitle green">NANO B | SENSORS + BLUETOOTH</text>
+  <text x="572" y="240" class="small">HC-05 and sensor shutdown control</text>
+  <text x="572" y="276" class="pin">D0/D1 - UART link RX/TX</text>
+  <text x="572" y="308" class="pin">D2 - HC-05 TX to Nano RX</text>
+  <text x="572" y="340" class="pin">D3 - Nano TX to HC-05 RX*</text>
+  <text x="572" y="372" class="pin">D4 - Front ToF XSHUT</text>
+  <text x="572" y="404" class="pin">D5 - Rear ToF XSHUT</text>
+  <text x="572" y="436" class="pin">D13 - Onboard LED, held HIGH</text>
+  <text x="572" y="468" class="pin">A4/A5 - Shared sensor I2C SDA/SCL</text>
+  <line x1="572" y1="488" x2="1020" y2="488" class="rule"/>
+  <text x="572" y="518" class="body">Front VL53L0X: 0x30</text>
+  <text x="572" y="548" class="body">Rear VL53L0X: 0x31</text>
+  <text x="572" y="578" class="body">RCWL-9610 ultrasonic: 0x57</text>
+  <text x="572" y="610" class="small">*Use a divider on D3 unless the HC-05 board shifts RX.</text>
+  <text x="572" y="637" class="small">RCWL mode: M1 open, M2 closed.</text>
+
+  <rect x="36" y="676" width="1008" height="196" rx="18" class="card"/>
+  <text x="60" y="714" class="section">INTER-NANO UART | 38400 BAUD</text>
+  <rect x="68" y="738" width="260" height="66" rx="12" fill="#E8F2F9"/>
+  <text x="198" y="766" text-anchor="middle" class="cardtitle blue">NANO A</text>
+  <text x="198" y="791" text-anchor="middle" class="body">D1 TX | D0 RX</text>
+  <rect x="752" y="738" width="260" height="66" rx="12" fill="#E6F3ED"/>
+  <text x="882" y="766" text-anchor="middle" class="cardtitle green">NANO B</text>
+  <text x="882" y="791" text-anchor="middle" class="body">D0 RX | D1 TX</text>
+  <path d="M 340 758 L 740 758" fill="none" stroke="#1769AA" stroke-width="4"/>
+  <polygon points="740,758 724,749 724,767" fill="#1769AA"/>
+  <path d="M 740 786 L 340 786" fill="none" stroke="#15806A" stroke-width="4"/>
+  <polygon points="340,786 356,777 356,795" fill="#15806A"/>
+  <text x="540" y="830" text-anchor="middle" class="small blue">A D1 TX to B D0 RX</text>
+  <text x="540" y="852" text-anchor="middle" class="small green">B D1 TX to A D0 RX | common GND</text>
+
+  <rect x="36" y="894" width="1008" height="250" rx="18" class="card"/>
+  <text x="60" y="932" class="section">SENSOR I2C BUS | SENSOR NANO A4/A5</text>
+  <text x="60" y="976" class="body">Sensor Nano A4/A5 is shared by the three modules; BMI160 stays on Nano A's separate bus.</text>
+  <rect x="60" y="1002" width="260" height="86" rx="12" fill="#F3F7FA" stroke="#C8D6DE" stroke-width="1.5"/>
+  <text x="190" y="1035" text-anchor="middle" class="cardtitle">FRONT FLOOR ToF</text>
+  <text x="190" y="1065" text-anchor="middle" class="body">XSHUT D4 | addr 0x30</text>
+  <rect x="410" y="1002" width="260" height="86" rx="12" fill="#F3F7FA" stroke="#C8D6DE" stroke-width="1.5"/>
+  <text x="540" y="1035" text-anchor="middle" class="cardtitle">REAR FLOOR ToF</text>
+  <text x="540" y="1065" text-anchor="middle" class="body">XSHUT D5 | addr 0x31</text>
+  <rect x="760" y="1002" width="260" height="86" rx="12" fill="#FFF2E5" stroke="#E9C9A6" stroke-width="1.5"/>
+  <text x="890" y="1035" text-anchor="middle" class="cardtitle orange">FRONT ULTRASONIC</text>
+  <text x="890" y="1065" text-anchor="middle" class="body">RCWL-9610 | addr 0x57</text>
+  <line x1="190" y1="1105" x2="890" y2="1105" stroke="#15806A" stroke-width="4"/>
+  <line x1="190" y1="1090" x2="190" y2="1105" stroke="#15806A" stroke-width="3"/>
+  <line x1="540" y1="1090" x2="540" y2="1105" stroke="#15806A" stroke-width="3"/>
+  <line x1="890" y1="1090" x2="890" y2="1105" stroke="#15806A" stroke-width="3"/>
+  <text x="540" y="1132" text-anchor="middle" class="small">Two ToFs start shut down; power up one at a time to assign unique addresses.</text>
+
+  <rect x="36" y="1166" width="1008" height="188" rx="18" class="card"/>
+  <text x="60" y="1204" class="section">POWER AND COMMON GROUND</text>
+  <circle cx="86" cy="1246" r="9" fill="#B64040"/>
+  <text x="108" y="1252" class="body">Motor battery to TB6612 VM, sized for the TT motors. Never power motors from Nano 5V.</text>
+  <circle cx="86" cy="1283" r="9" fill="#183044"/>
+  <text x="108" y="1289" class="body">Join both Nano grounds, TB6612 GND, sensor grounds, and motor-supply ground.</text>
+  <circle cx="86" cy="1320" r="9" fill="#B75C1B"/>
+  <text x="108" y="1326" class="body">GY-BMI160 5V-ready revision: VCC 5V, SAO to GND (0x68); verify XSHUT tolerance.</text>
+
+  <rect x="36" y="1376" width="1008" height="300" rx="18" fill="#183044"/>
+  <text x="60" y="1417" class="section" style="fill:#FFFFFF">WHAT CAN MOVE?</text>
+  <text x="60" y="1455" class="body" style="fill:#FFFFFF">FIXED: A4/A5 I2C, D0/D1 controller UART, D13 onboard LED. Keep these reserved.</text>
+  <text x="60" y="1490" class="body" style="fill:#FFFFFF">FLEXIBLE GPIO: motor direction, STBY, XSHUT, buzzer, HC-05 signals. Update the</text>
+  <text x="60" y="1517" class="body" style="fill:#FFFFFF">pin constants in that Nano's sketch when rerouting. Keep each XSHUT unique.</text>
+  <text x="60" y="1556" class="body" style="fill:#FFFFFF">PWM: D3, D5, D6, D9, D10, D11. D5/D6 are used now; D3 is already AIN2.</text>
+  <text x="60" y="1593" class="body" style="fill:#FFFFFF">HC-05 RX must use a SoftwareSerial receive-capable pin. D0/D1 are shared with</text>
+  <text x="60" y="1620" class="body" style="fill:#FFFFFF">USB upload; open a 2-pole link switch while uploading either Nano.</text>
+  <text x="60" y="1652" class="small" style="fill:#B9CBD5">Restrained tests only. No wheel encoders or certified safety system.</text>
+
+  <text x="540" y="1735" text-anchor="middle" class="small">TWO NANO PATROL BOT | PIN MAP REV 1 | Verify breakout voltage before wiring</text>
+</svg>
