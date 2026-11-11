@@ -32,6 +32,9 @@ Pin constants in the production sketches are authoritative. These references mat
 | Shared sensor I2C SDA / SCL | A4 / A5 |
 | Inter-Nano UART RX / TX | D0 / D1 |
 
+## Testing
+Follow the [step-by-step testing guide](TESTING_GUIDE.md) to test SensorTest and BalanceTest in order, verify sensor readings and the inter-Nano link, check safety responses, and then restore the production firmware.
+
 ## Build
 Install the Arduino AVR Nano core, DFRobot_BMI160, and Pololu VL53L0X. Compile each sketch for the classic Nano / ATmega328P:
 
