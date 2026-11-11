@@ -21,7 +21,7 @@ const unsigned long LINK_PERIOD_MS = 50;
 // Set to 1 to restore Bluetooth diagnostics after this isolation test.
 #define ENABLE_BLUETOOTH_DIAGNOSTICS 1
 
-const unsigned long TELEMETRY_PERIOD_MS = 1000;
+const unsigned long TELEMETRY_PERIOD_MS = 2000;
 const unsigned long LINK_TIMEOUT_MS = 1000;
 
 // Ultrasonic diagnostic states for Bluetooth testing output.
@@ -255,10 +255,7 @@ void readControllerLink() {
     lastControllerFrameAt = millis();
     controllerSeen = true;
     if (packet.type == LINK_STATUS_FRAME && packet.length > 0) {
-#if ENABLE_BLUETOOTH_DIAGNOSTICS
-      bluetooth.write(packet.payload, packet.length);
-      bluetooth.println();
-#endif
+      // Diagnostic isolation: do not forward heartbeat/status traffic over SoftwareSerial.
     } else if (packet.type == TEST_GYRO_FRAME && packet.length >= 9) {
       pitchCentiDegrees = static_cast<int16_t>(linkReadU16(&packet.payload[0]));
       pitchRateCentiDps = static_cast<int16_t>(linkReadU16(&packet.payload[2]));
@@ -284,40 +281,13 @@ void sendSensorFrame() {
 
 void sendBluetoothTelemetry(unsigned long now) {
   const bool linkUp = controllerSeen && now - lastControllerFrameAt <= LINK_TIMEOUT_MS;
-  if (linkUp != linkWasUp) {
-    linkWasUp = linkUp;
-    bluetooth.println(linkUp ? F("EVENT,LINK UP") : F("EVENT,LINK LOST"));
-  }
-
-  char line[LINK_MAX_PAYLOAD * 5];
-  snprintf(line, sizeof(line), "DATA,LINK:%s,IMU:%s,ARM:%u,AUTO:%u",
-           linkUp ? "UP" : "DOWN", controllerImuReady ? "OK" : "ERR",
-           controllerArmed ? 1 : 0,
-           controllerAuto ? 1 : 0);
-  bluetooth.println(line);
-
-  if (ultrasonicDiagState == ULTRA_DIAG_OK) {
-    snprintf(line, sizeof(line), "ULTRA,OK:%ucm,RAW:%lu",
-             frontDistanceCm, static_cast<unsigned long>(ultrasonicRawMicrometers));
-  } else if (ultrasonicDiagState == ULTRA_DIAG_TRIGGER_ERROR) {
-    snprintf(line, sizeof(line), "ULTRA,I2C_TRIGGER_ERROR");
-  } else if (ultrasonicDiagState == ULTRA_DIAG_READ_ERROR) {
-    snprintf(line, sizeof(line), "ULTRA,I2C_READ_ERROR,BYTES:%u",
-             ultrasonicBytesReceived);
-  } else {
-    snprintf(line, sizeof(line), "ULTRA,INVALID,RAW:%lu",
-             static_cast<unsigned long>(ultrasonicRawMicrometers));
-  }
-  bluetooth.println(line);
-  appendDistance(line, sizeof(line), "FLOOR_F", frontFloorValid, frontFloorMm, "mm");
-  bluetooth.println(line);
-  appendDistance(line, sizeof(line), "FLOOR_R", rearFloorValid, rearFloorMm, "mm");
-  bluetooth.println(line);
-
-  snprintf(line, sizeof(line), "GYRO,P:%d.%02u,PR:%d.%02u,YR:%d.%02u",
-           pitchCentiDegrees / 100, abs(pitchCentiDegrees % 100),
-           pitchRateCentiDps / 100, abs(pitchRateCentiDps % 100),
-           yawRateCentiDps / 100, abs(yawRateCentiDps % 100));
+  char line[LINK_MAX_PAYLOAD * 2];
+  snprintf(line, sizeof(line), "DATA,L:%u,I:%u,U:%u,F:%u,R:%u",
+           linkUp ? 1 : 0,
+           controllerImuReady ? 1 : 0,
+           ultrasonicValid ? frontDistanceCm : 0xFFFF,
+           frontFloorValid ? frontFloorMm : 0xFFFF,
+           rearFloorValid ? rearFloorMm : 0xFFFF);
   bluetooth.println(line);
 }
 
