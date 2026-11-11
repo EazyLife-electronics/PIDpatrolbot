@@ -3,8 +3,8 @@
 #include <VL53L0X.h>
 #include "RobotLink.h"
 
-const uint8_t BT_RX_PIN = 3;
-const uint8_t BT_TX_PIN = 2;
+const uint8_t BT_RX_PIN = 2;
+const uint8_t BT_TX_PIN = 3;
 const uint8_t XSHUT_FRONT_PIN = A2;
 const uint8_t XSHUT_REAR_PIN = A1;
 const uint8_t STATUS_LED_PIN = 13;
