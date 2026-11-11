@@ -83,6 +83,8 @@ void loop() {
     frontFloorValid = false; rearFloorValid = false;
     frontFloorMm = 0xFFFF; rearFloorMm = 0xFFFF;
     initializeTofSensors();
+    frontTofTimeoutCount = 0;
+    rearTofTimeoutCount = 0;
   }
   updateUltrasonic(now);
 
