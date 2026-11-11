@@ -68,6 +68,7 @@ unsigned long lastLoopUs = 0;
 unsigned long lastImuMs = 0;
 unsigned long lastLedMs = 0;
 bool ledState = false;
+uint8_t faultCode = 0;
 bool controllerReady = false;
 bool faultLatched = false;
 
@@ -82,7 +83,8 @@ void stopMotors() {
   previousRight = 0.0f;
 }
 
-void latchFault() {
+void latchFault(uint8_t reason) {
+  faultCode = reason;
   faultLatched = true;
   controllerReady = false;
   stopMotors();
@@ -204,11 +206,14 @@ bool readImu(float dt) {
 
 void updateStatusLed() {
   if (faultLatched) {
-    if (millis() - lastLedMs >= 150) {
-      lastLedMs = millis();
-      ledState = !ledState;
-      digitalWrite(STATUS_LED_PIN, ledState);
+    // Runtime fault code: number of short flashes, repeated every 2 seconds.
+    const unsigned long phase = millis() % 2000UL;
+    bool on = false;
+    for (uint8_t i = 0; i < faultCode; i++) {
+      const unsigned long start = (unsigned long)i * 260UL;
+      if (phase >= start && phase < start + 120UL) on = true;
     }
+    digitalWrite(STATUS_LED_PIN, on ? HIGH : LOW);
   } else {
     digitalWrite(STATUS_LED_PIN, controllerReady ? HIGH : LOW);
   }
@@ -234,7 +239,7 @@ void setup() {
 
   if (bmi160.softReset() != BMI160_OK ||
       bmi160.I2cInit(BMI160_ADDRESS) != BMI160_OK) {
-    latchFault();
+    latchFault(1);
     while (true) {
       digitalWrite(BUZZER_PIN, HIGH);
       delay(150);
@@ -245,7 +250,7 @@ void setup() {
 
   // Calibration requires the robot to be motionless and held upright.
   if (!calibrateImu()) {
-    latchFault();
+    latchFault(2);
     while (true) {
       digitalWrite(BUZZER_PIN, HIGH);
       delay(150);
@@ -257,7 +262,7 @@ void setup() {
   // Seed the complementary filter with a real accelerometer angle.
   int16_t data[6];
   if (bmi160.getAccelGyroData(data) != 0) {
-    latchFault();
+    latchFault(3);
     while (true) delay(100);
   }
 
@@ -297,20 +302,20 @@ void loop() {
 
   // A long loop pause means the controller missed its timing budget.
   if (dt > MAX_VALID_DT || dt <= 0.0f) {
-    latchFault();
+    latchFault(4);
     updateStatusLed();
     return;
   }
 
   if (!readImu(dt)) {
-    if (millis() - lastImuMs > IMU_TIMEOUT_MS) latchFault();
+    if (millis() - lastImuMs > IMU_TIMEOUT_MS) latchFault(5);
     updateStatusLed();
     return;
   }
 
   if (millis() - lastImuMs > IMU_TIMEOUT_MS ||
       fabs(pitch) >= FALL_ANGLE_DEG) {
-    latchFault();
+    latchFault(6);
     updateStatusLed();
     return;
   }
