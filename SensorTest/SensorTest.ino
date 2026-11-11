@@ -18,6 +18,9 @@ const unsigned long TOF_SAMPLE_MS = 70;
 const unsigned long ULTRASONIC_PERIOD_MS = 250;
 const unsigned long ULTRASONIC_CONVERSION_MS = 150;
 const unsigned long LINK_PERIOD_MS = 50;
+// Set to 1 to restore Bluetooth diagnostics after this isolation test.
+#define ENABLE_BLUETOOTH_DIAGNOSTICS 0
+
 const unsigned long TELEMETRY_PERIOD_MS = 300;
 const unsigned long LINK_TIMEOUT_MS = 1000;
 
@@ -80,22 +83,28 @@ void setup() {
   pinMode(STATUS_LED_PIN, OUTPUT);
   digitalWrite(STATUS_LED_PIN, HIGH);
   Serial.begin(38400);
+#if ENABLE_BLUETOOTH_DIAGNOSTICS
   bluetooth.begin(9600);
+#endif
   Wire.begin();
   randomSeed(analogRead(A0));
 
   pinMode(XSHUT_FRONT_PIN, OUTPUT);
   pinMode(XSHUT_REAR_PIN, OUTPUT);
   initializeTofSensors();
+#if ENABLE_BLUETOOTH_DIAGNOSTICS
   bluetooth.println(F("BOOT,SENSOR TEST; send STATUS"));
   if (!frontTofReady) bluetooth.println(F("ERR,FRONT TOF INIT"));
   if (!rearTofReady) bluetooth.println(F("ERR,REAR TOF INIT"));
+#endif
   sendLinkCommand("PING");
 }
 
 void loop() {
   const unsigned long now = millis();
+#if ENABLE_BLUETOOTH_DIAGNOSTICS
   readBluetoothCommands();
+#endif
   readControllerLink();
   sampleFloorSensors(now);
   updateUltrasonic(now);
@@ -104,10 +113,12 @@ void loop() {
     lastLinkAt = now;
     sendSensorFrame();
   }
+#if ENABLE_BLUETOOTH_DIAGNOSTICS
   if (now - lastTelemetryAt >= TELEMETRY_PERIOD_MS) {
     lastTelemetryAt = now;
     sendBluetoothTelemetry(now);
   }
+#endif
 }
 
 void initializeTofSensors() {
@@ -240,8 +251,10 @@ void readControllerLink() {
     lastControllerFrameAt = millis();
     controllerSeen = true;
     if (packet.type == LINK_STATUS_FRAME && packet.length > 0) {
+#if ENABLE_BLUETOOTH_DIAGNOSTICS
       bluetooth.write(packet.payload, packet.length);
       bluetooth.println();
+#endif
     } else if (packet.type == TEST_GYRO_FRAME && packet.length >= 9) {
       pitchCentiDegrees = static_cast<int16_t>(linkReadU16(&packet.payload[0]));
       pitchRateCentiDps = static_cast<int16_t>(linkReadU16(&packet.payload[2]));
