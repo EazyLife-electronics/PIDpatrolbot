@@ -31,6 +31,10 @@ const unsigned long LOOP_US = 5500;
 const unsigned long MANUAL_JOG_MS = 650;
 const unsigned long TURN_TIMEOUT_MS = 2600;
 const unsigned long SURFACE_LOST_CONFIRM_MS = 120;
+const unsigned long SURFACE_RECOVER_CONFIRM_MS = 500;
+// false: stop on floor loss, then resume after both floor sensors are safe.
+// true: keep the floor-loss stop latched until the controller is restarted.
+const bool LATCH_SURFACE_LOST_FAULT = false;
 
 DFRobot_BMI160 bmi160;
 LinkParser linkParser;
@@ -64,6 +68,7 @@ unsigned long lastLoopTime = 0;
 unsigned long lastSensorFrameAt = 0;
 unsigned long lastImuAt = 0;
 unsigned long surfaceLostSince = 0;
+unsigned long surfaceSafeSince = 0;
 unsigned long lastPatrolTurnAt = 0;
 unsigned long actionExpiresAt = 0;
 unsigned long overAngleSince = 0;
@@ -379,12 +384,6 @@ void updateBehavior(unsigned long now) {
     return;
   }
 
-  if (surfaceLost) {
-    action.active = false;
-    targetYaw = yaw;
-    return;
-  }
-
   const bool fresh = sensorDataFresh(now);
   const bool edgeSensorsValid = fresh &&
       (sensorFlags & (SENSOR_FLAG_FRONT_FLOOR | SENSOR_FLAG_REAR_FLOOR)) ==
@@ -398,9 +397,38 @@ void updateBehavior(unsigned long now) {
   const bool noFloorUnderEitherEnd = edgeSensorsValid &&
       !frontFloorPresent && !rearFloorPresent;
 
+  if (surfaceLost) {
+    action.active = false;
+    targetYaw = yaw;
+    stopMotors();
+
+    if (LATCH_SURFACE_LOST_FAULT) return;
+
+    const bool floorRecovered = fresh && edgeSensorsValid &&
+        frontFloorPresent && rearFloorPresent;
+    if (!floorRecovered) {
+      surfaceSafeSince = 0;
+      return;
+    }
+
+    if (surfaceSafeSince == 0) surfaceSafeSince = now;
+    if (now - surfaceSafeSince < SURFACE_RECOVER_CONFIRM_MS) return;
+
+    surfaceLost = false;
+    surfaceLostSince = 0;
+    surfaceSafeSince = 0;
+    integralAngle = 0.0f;
+    filteredD = 0.0f;
+    targetYaw = yaw;
+    digitalWrite(STBY, HIGH);
+    sendStatus("RECOVERED FLOOR");
+    beep(100);
+  }
+
   if (noFloorUnderEitherEnd) {
+    surfaceSafeSince = 0;
     if (surfaceLostSince == 0) surfaceLostSince = now;
-    if (now - surfaceLostSince >= SURFACE_LOST_CONFIRM_MS) {
+    if (now - surfaceLostSince >= SURFACE_LOST_CONFIRM_MS && !surfaceLost) {
       surfaceLost = true;
       action.active = false;
       targetYaw = yaw;
