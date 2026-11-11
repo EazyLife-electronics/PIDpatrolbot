@@ -21,6 +21,12 @@ const unsigned long LINK_PERIOD_MS = 50;
 const unsigned long TELEMETRY_PERIOD_MS = 300;
 const unsigned long LINK_TIMEOUT_MS = 1000;
 
+// Ultrasonic diagnostic states for Bluetooth testing output.
+const uint8_t ULTRA_DIAG_OK = 0;
+const uint8_t ULTRA_DIAG_TRIGGER_ERROR = 1;
+const uint8_t ULTRA_DIAG_READ_ERROR = 2;
+const uint8_t ULTRA_DIAG_INVALID = 3;
+
 SoftwareSerial bluetooth(BT_RX_PIN, BT_TX_PIN);
 VL53L0X frontTof;
 VL53L0X rearTof;
@@ -35,6 +41,9 @@ bool frontFloorValid = false;
 bool rearFloorValid = false;
 bool ultrasonicValid = false;
 bool ultrasonicPending = false;
+uint8_t ultrasonicDiagState = ULTRA_DIAG_READ_ERROR;
+uint8_t ultrasonicBytesReceived = 0;
+uint32_t ultrasonicRawMicrometers = 0;
 bool controllerSeen = false;
 bool linkWasUp = false;
 bool controllerImuReady = false;
@@ -165,17 +174,25 @@ void triggerUltrasonic(unsigned long now) {
   lastUltrasonicTriggerAt = now;
   Wire.beginTransmission(RCWL_ADDRESS);
   Wire.write(0x01);
-  ultrasonicPending = Wire.endTransmission() == 0;
+  const uint8_t result = Wire.endTransmission();
+  ultrasonicPending = result == 0;
   ultrasonicReadyAt = now + ULTRASONIC_CONVERSION_MS;
-  if (!ultrasonicPending) ultrasonicValid = false;
+  if (!ultrasonicPending) {
+    ultrasonicValid = false;
+    frontDistanceCm = 0xFFFF;
+    ultrasonicDiagState = ULTRA_DIAG_TRIGGER_ERROR;
+    ultrasonicBytesReceived = 0;
+  }
 }
 
 void readUltrasonic() {
   const uint8_t received = Wire.requestFrom(RCWL_ADDRESS, static_cast<uint8_t>(3));
+  ultrasonicBytesReceived = received;
   if (received < 3 || Wire.available() < 3) {
     while (Wire.available()) Wire.read();
     ultrasonicValid = false;
     frontDistanceCm = 0xFFFF;
+    ultrasonicDiagState = ULTRA_DIAG_READ_ERROR;
     return;
   }
 
@@ -183,9 +200,11 @@ void readUltrasonic() {
   const uint32_t middleByte = static_cast<uint8_t>(Wire.read());
   const uint32_t lowByte = static_cast<uint8_t>(Wire.read());
   const uint32_t distanceMicrometers = (highByte << 16) | (middleByte << 8) | lowByte;
+  ultrasonicRawMicrometers = distanceMicrometers;
   const uint32_t distanceCm = distanceMicrometers / 10000UL;
   ultrasonicValid = distanceCm > 0 && distanceCm < 450;
   frontDistanceCm = ultrasonicValid ? static_cast<uint16_t>(distanceCm) : 0xFFFF;
+  ultrasonicDiagState = ultrasonicValid ? ULTRA_DIAG_OK : ULTRA_DIAG_INVALID;
 }
 
 void readBluetoothCommands() {
@@ -260,7 +279,18 @@ void sendBluetoothTelemetry(unsigned long now) {
            controllerAuto ? 1 : 0);
   bluetooth.println(line);
 
-  appendDistance(line, sizeof(line), "ULTRA", ultrasonicValid, frontDistanceCm, "cm");
+  if (ultrasonicDiagState == ULTRA_DIAG_OK) {
+    snprintf(line, sizeof(line), "ULTRA,OK:%ucm,RAW:%lu",
+             frontDistanceCm, static_cast<unsigned long>(ultrasonicRawMicrometers));
+  } else if (ultrasonicDiagState == ULTRA_DIAG_TRIGGER_ERROR) {
+    snprintf(line, sizeof(line), "ULTRA,I2C_TRIGGER_ERROR");
+  } else if (ultrasonicDiagState == ULTRA_DIAG_READ_ERROR) {
+    snprintf(line, sizeof(line), "ULTRA,I2C_READ_ERROR,BYTES:%u",
+             ultrasonicBytesReceived);
+  } else {
+    snprintf(line, sizeof(line), "ULTRA,INVALID,RAW:%lu",
+             static_cast<unsigned long>(ultrasonicRawMicrometers));
+  }
   bluetooth.println(line);
   appendDistance(line, sizeof(line), "FLOOR_F", frontFloorValid, frontFloorMm, "mm");
   bluetooth.println(line);
