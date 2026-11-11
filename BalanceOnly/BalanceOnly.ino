@@ -267,13 +267,16 @@ void setup() {
   pitch = atan2(-ax, sqrt(ay * ay + az * az)) * 57.2957795f;
 
   lastImuMs = millis();
-  lastLoopUs = micros();
   controllerReady = true;
   digitalWrite(STBY, HIGH);
 
   digitalWrite(BUZZER_PIN, HIGH);
   delay(80);
   digitalWrite(BUZZER_PIN, LOW);
+
+  // Start the control-loop clock AFTER the blocking startup beep.
+  // Otherwise the first loop sees the beep delay as a timing fault.
+  lastLoopUs = micros();
 }
 
 void loop() {
