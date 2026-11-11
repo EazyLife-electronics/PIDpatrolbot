@@ -26,7 +26,7 @@ Pin constants in the production sketches are authoritative. These references mat
 ### Sensor Nano
 | Function | Pin |
 | --- | --- |
-| HC-05 SoftwareSerial RX / TX | D3 / D2 |
+| HC-05 SoftwareSerial RX / TX | D2 / D3 |
 | Front / rear VL53L0X XSHUT | A2 / A1 |
 | Status LED | D13 |
 | Shared sensor I2C SDA / SCL | A4 / A5 |
