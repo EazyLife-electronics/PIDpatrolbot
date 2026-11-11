@@ -47,8 +47,8 @@ These pins have fixed roles in the current design:
 | A4 / A5 on both Nanos | Hardware I2C (`Wire`) for the BMI160 on the balance Nano and ToF/RCWL sensors on the sensor Nano |
 | D0 / D1 on both Nanos | Hardware UART for the inter-Nano link and also the Nano bootloader/USB serial connection |
 | D13 on both Nanos | Reserved as the onboard status LED output, held HIGH from startup |
-| Sensor Nano D2 | HC-05 receive input for `SoftwareSerial`; if moved, choose another unused pin supported by AVR pin-change interrupts and update `BT_RX_PIN` |
-| Sensor Nano D3 | HC-05 transmit output; if moved, update `BT_TX_PIN` and preserve the voltage divider/level shifting on the Nano-to-HC-05 RX line |
+| Sensor Nano D2 | SoftwareSerial RX input; connect HC-05 TX here and update `BT_RX_PIN` if moved |
+| Sensor Nano D3 | SoftwareSerial TX output to HC-05 RX; preserve the voltage divider/level shifting and update `BT_TX_PIN` if moved |
 
 PWM can only move to hardware PWM pins: D3, D5, D6, D9, D10, or D11. The current balance sketch uses D5/D6, which are Timer0 PWM outputs. Timer0 also provides Arduino `millis()`/`micros()`; ordinary `analogWrite()` on D5/D6 is fine, but do not reconfigure Timer0 if the control timing is needed. D9/D10 use Timer1 and are available in this firmware, but adding a library such as `Servo` may claim Timer1 and change that. The balance loop itself is scheduled with `micros()`; it does not reserve a hardware timer output pin.
 
