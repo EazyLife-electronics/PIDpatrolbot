@@ -16,6 +16,13 @@ const uint8_t STATUS_LED_PIN = 13;
 const uint8_t SENSOR_FLAG_ULTRASONIC = 0x01;
 const uint8_t SENSOR_FLAG_FRONT_FLOOR = 0x02;
 const uint8_t SENSOR_FLAG_REAR_FLOOR = 0x04;
+const uint8_t SENSOR_ULTRA_STATUS_SHIFT = 3;
+const uint8_t SENSOR_ULTRA_STATUS_MASK = 0x38;
+const uint8_t ULTRA_STATUS_VALID = 0;
+const uint8_t ULTRA_STATUS_OUT_OF_RANGE = 1;
+const uint8_t ULTRA_STATUS_TRIGGER_ERROR = 2;
+const uint8_t ULTRA_STATUS_READ_ERROR = 3;
+const uint8_t ULTRA_STATUS_STALE = 4;
 const uint16_t FLOOR_LIMIT_MM = 220;
 const uint16_t SENSOR_STALE_MS = 350;
 const uint16_t DEFAULT_OBSTACLE_CM = 35;
@@ -284,8 +291,29 @@ bool beginAction(float pitchTarget, float yawDelta, bool turning,
                          floorSafeForReverse();
 
   // Missing or invalid distance data is never interpreted as a clear path.
-  if ((pitchTarget < 0.0f && !forwardSafe) ||
-      (pitchTarget > 0.0f && !reverseSafe) ||
+  if (pitchTarget < 0.0f && !forwardSafe) {
+    if (sensorsFresh && floorSafeForForward()) {
+      const uint8_t ultraStatus =
+          (sensorFlags & SENSOR_ULTRA_STATUS_MASK) >> SENSOR_ULTRA_STATUS_SHIFT;
+      if (ultraStatus == ULTRA_STATUS_OUT_OF_RANGE)
+        sendStatus("BLOCKED,ULTRA OUT OF RANGE");
+      else if (ultraStatus == ULTRA_STATUS_TRIGGER_ERROR)
+        sendStatus("BLOCKED,ULTRA TRIGGER ERROR");
+      else if (ultraStatus == ULTRA_STATUS_READ_ERROR)
+        sendStatus("BLOCKED,ULTRA READ ERROR");
+      else if (ultraStatus == ULTRA_STATUS_STALE)
+        sendStatus("BLOCKED,ULTRA STALE");
+      else
+        sendStatus("BLOCKED,ULTRA INVALID");
+    } else {
+      sendStatus("BLOCKED,SENSOR LIMIT");
+    }
+    action.active = false;
+    targetYaw = yaw;
+    beep(180);
+    return false;
+  }
+  if ((pitchTarget > 0.0f && !reverseSafe) ||
       (turning && pitchTarget == 0.0f && !pivotSafe)) {
     action.active = false;
     targetYaw = yaw;
