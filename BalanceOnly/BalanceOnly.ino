@@ -236,6 +236,8 @@ void setup() {
   stopMotors();
 
   Wire.begin();
+  // Run the BMI160 I2C bus at the sensor's supported fast-mode rate.
+  Wire.setClock(400000UL);
 
   if (bmi160.softReset() != BMI160_OK ||
       bmi160.I2cInit(BMI160_ADDRESS) != BMI160_OK) {
