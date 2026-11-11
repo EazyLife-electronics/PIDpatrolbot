@@ -53,7 +53,7 @@ At boot, `ERR,FRONT TOF INIT` or `ERR,REAR TOF INIT` means that sensor did not i
 1. Keep a flat target in front of the RCWL-9610.
 2. Move it to several measured distances within the module's usable range.
 3. Watch for `ULTRA,OK:xxcm`; the displayed distance should change as the target moves.
-4. Remove the target or move it outside the sensor's reliable range. An invalid reading should appear as `ULTRA,ERR:NA`.
+4. Remove the target or move it outside the sensor's reliable range. The diagnostic sketch should report `ULTRA,INVALID,RAW:...` when the I2C read succeeds but the returned distance is outside the accepted range. It reports `ULTRA,I2C_TRIGGER_ERROR` or `ULTRA,I2C_READ_ERROR` for communication failures.
 
 If the ultrasonic line remains invalid, verify that the RCWL-9610 is configured for I2C (M1 open, M2 closed), is at address `0x57`, and shares the sensor Nano's A4/A5 bus. Check the module's voltage and pull-up requirements.
 
@@ -173,7 +173,8 @@ The test sketches and production sketches use the same pin assignments, but they
 | Symptom | First checks |
 | --- | --- |
 | `ERR,FRONT TOF INIT` / `ERR,REAR TOF INIT` | Sensor power, GND, A4/A5, correct XSHUT pin, module voltage |
-| `ULTRA,ERR:NA` | RCWL-9610 I2C mode, address 0x57, A4/A5, supply and wiring |
+| `ULTRA,INVALID` | Target is not returning a usable echo or is outside the accepted range; compare RAW values and target material/angle.
+| `ULTRA,I2C_TRIGGER_ERROR` / `ULTRA,I2C_READ_ERROR` | RCWL-9610 I2C mode, address 0x57, A4/A5, supply and wiring |
 | `DATA,LINK:DOWN` | Both Nanos powered, crossed D0/D1, common GND, 38400 baud inter-Nano link |
 | `TEST ERR IMU` | BMI160 supply, GND, A4/A5, SAO address strap |
 | `ERR ARM CHECK SENSORS` | Fresh link, both floor readings valid and <= 220 mm |
