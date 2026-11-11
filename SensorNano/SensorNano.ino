@@ -18,6 +18,8 @@ const uint8_t SENSOR_FLAG_REAR_FLOOR = 0x04;
 const unsigned long TOF_SAMPLE_MS = 70;
 const unsigned long ULTRASONIC_PERIOD_MS = 250;
 const unsigned long ULTRASONIC_CONVERSION_MS = 150;
+const unsigned long ULTRASONIC_STALE_MS = 750;
+const unsigned long TOF_RETRY_MS = 3000;
 const unsigned long LINK_PERIOD_MS = 50;
 
 SoftwareSerial bluetooth(BT_RX_PIN, BT_TX_PIN);
@@ -36,7 +38,11 @@ bool ultrasonicValid = false;
 bool ultrasonicPending = false;
 unsigned long ultrasonicReadyAt = 0;
 unsigned long lastUltrasonicTriggerAt = 0;
+unsigned long lastUltrasonicReadAt = 0;
 unsigned long lastTofSampleAt = 0;
+unsigned long lastTofRetryAt = 0;
+uint8_t frontTofTimeoutCount = 0;
+uint8_t rearTofTimeoutCount = 0;
 unsigned long lastLinkAt = 0;
 uint8_t linkSequence = 0;
 uint8_t commandSequence = 0;
@@ -63,6 +69,7 @@ void setup() {
   pinMode(XSHUT_FRONT_PIN, OUTPUT);
   pinMode(XSHUT_REAR_PIN, OUTPUT);
   initializeTofSensors();
+  lastTofRetryAt = millis();
   sendStatusToController("SENSOR NODE READY");
 }
 
@@ -71,6 +78,12 @@ void loop() {
   readBluetoothCommands();
   forwardControllerMessages();
   sampleFloorSensors(now);
+  if ((!frontTofReady || !rearTofReady) && now - lastTofRetryAt >= TOF_RETRY_MS) {
+    lastTofRetryAt = now;
+    frontFloorValid = false; rearFloorValid = false;
+    frontFloorMm = 0xFFFF; rearFloorMm = 0xFFFF;
+    initializeTofSensors();
+  }
   updateUltrasonic(now);
 
   if (now - lastLinkAt >= LINK_PERIOD_MS) {
@@ -112,6 +125,8 @@ void sampleFloorSensors(unsigned long now) {
   if (frontTofReady) {
     const uint16_t reading = frontTof.readRangeContinuousMillimeters();
     const bool timedOut = frontTof.timeoutOccurred();
+    if (timedOut) { if (frontTofTimeoutCount < 5) frontTofTimeoutCount++; if (frontTofTimeoutCount >= 5) frontTofReady = false; }
+    else frontTofTimeoutCount = 0;
     frontFloorValid = !timedOut;
     frontFloorMm = timedOut ? 0xFFFF : reading;
   } else {
@@ -122,6 +137,8 @@ void sampleFloorSensors(unsigned long now) {
   if (rearTofReady) {
     const uint16_t reading = rearTof.readRangeContinuousMillimeters();
     const bool timedOut = rearTof.timeoutOccurred();
+    if (timedOut) { if (rearTofTimeoutCount < 5) rearTofTimeoutCount++; if (rearTofTimeoutCount >= 5) rearTofReady = false; }
+    else rearTofTimeoutCount = 0;
     rearFloorValid = !timedOut;
     rearFloorMm = timedOut ? 0xFFFF : reading;
   } else {
@@ -131,6 +148,10 @@ void sampleFloorSensors(unsigned long now) {
 }
 
 void updateUltrasonic(unsigned long now) {
+  if (ultrasonicValid && now - lastUltrasonicReadAt > ULTRASONIC_STALE_MS) {
+    ultrasonicValid = false;
+    frontDistanceCm = 0xFFFF;
+  }
   if (ultrasonicPending && static_cast<int32_t>(now - ultrasonicReadyAt) >= 0) {
     readUltrasonic();
     ultrasonicPending = false;
@@ -148,7 +169,7 @@ void triggerUltrasonic(unsigned long now) {
   const uint8_t result = Wire.endTransmission();
   ultrasonicPending = result == 0;
   ultrasonicReadyAt = now + ULTRASONIC_CONVERSION_MS;
-  if (!ultrasonicPending) ultrasonicValid = false;
+  if (!ultrasonicPending) { ultrasonicValid = false; frontDistanceCm = 0xFFFF; }
 }
 
 void readUltrasonic() {
@@ -168,6 +189,7 @@ void readUltrasonic() {
 
   ultrasonicValid = distanceCm > 0 && distanceCm < 450;
   frontDistanceCm = ultrasonicValid ? static_cast<uint16_t>(distanceCm) : 0xFFFF;
+  if (ultrasonicValid) lastUltrasonicReadAt = millis();
 }
 
 void readBluetoothCommands() {
