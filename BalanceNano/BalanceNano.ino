@@ -70,6 +70,7 @@ unsigned long overAngleSince = 0;
 unsigned long buzzerOffAt = 0;
 
 uint8_t sensorFlags = 0;
+uint8_t lastReportedUltraStatus = 0xFF;
 uint16_t frontDistanceCm = 0xFFFF;
 uint16_t frontFloorMm = 0xFFFF;
 uint16_t rearFloorMm = 0xFFFF;
@@ -197,6 +198,23 @@ void updateSensorsFromLink() {
   while (linkParser.poll(Serial, packet)) {
     if (packet.type == LINK_SENSOR_FRAME && packet.length >= 7) {
       sensorFlags = packet.payload[0];
+      const uint8_t ultraStatus =
+          (sensorFlags & SENSOR_ULTRA_STATUS_MASK) >> SENSOR_ULTRA_STATUS_SHIFT;
+      if (ultraStatus != lastReportedUltraStatus) {
+        lastReportedUltraStatus = ultraStatus;
+        if (ultraStatus == ULTRA_STATUS_VALID)
+          sendStatus("ULTRA:VALID");
+        else if (ultraStatus == ULTRA_STATUS_OUT_OF_RANGE)
+          sendStatus("ULTRA:OUT OF RANGE");
+        else if (ultraStatus == ULTRA_STATUS_TRIGGER_ERROR)
+          sendStatus("ULTRA:TRIGGER ERR");
+        else if (ultraStatus == ULTRA_STATUS_READ_ERROR)
+          sendStatus("ULTRA:READ ERR");
+        else if (ultraStatus == ULTRA_STATUS_STALE)
+          sendStatus("ULTRA:STALE");
+        else
+          sendStatus("ULTRA:INVALID");
+      }
       frontDistanceCm = linkReadU16(&packet.payload[1]);
       frontFloorMm = linkReadU16(&packet.payload[3]);
       rearFloorMm = linkReadU16(&packet.payload[5]);
@@ -296,15 +314,15 @@ bool beginAction(float pitchTarget, float yawDelta, bool turning,
       const uint8_t ultraStatus =
           (sensorFlags & SENSOR_ULTRA_STATUS_MASK) >> SENSOR_ULTRA_STATUS_SHIFT;
       if (ultraStatus == ULTRA_STATUS_OUT_OF_RANGE)
-        sendStatus("BLOCKED,ULTRA OUT OF RANGE");
+        sendStatus("BLOCKED,ULTRA RANGE");
       else if (ultraStatus == ULTRA_STATUS_TRIGGER_ERROR)
-        sendStatus("BLOCKED,ULTRA TRIGGER ERROR");
+        sendStatus("BLOCKED,ULTRA TRIG");
       else if (ultraStatus == ULTRA_STATUS_READ_ERROR)
-        sendStatus("BLOCKED,ULTRA READ ERROR");
+        sendStatus("BLOCKED,ULTRA READ");
       else if (ultraStatus == ULTRA_STATUS_STALE)
         sendStatus("BLOCKED,ULTRA STALE");
       else
-        sendStatus("BLOCKED,ULTRA INVALID");
+        sendStatus("BLOCKED,ULTRA BAD");
     } else {
       sendStatus("BLOCKED,SENSOR LIMIT");
     }
