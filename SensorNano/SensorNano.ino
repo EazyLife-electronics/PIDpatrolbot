@@ -21,6 +21,7 @@ const uint8_t ULTRA_STATUS_OUT_OF_RANGE = 1;
 const uint8_t ULTRA_STATUS_TRIGGER_ERROR = 2;
 const uint8_t ULTRA_STATUS_READ_ERROR = 3;
 const uint8_t ULTRA_STATUS_STALE = 4;
+const uint16_t ULTRASONIC_MAX_NAV_CM = 90;
 
 const unsigned long TOF_SAMPLE_MS = 70;
 const unsigned long ULTRASONIC_PERIOD_MS = 250;
@@ -203,7 +204,7 @@ void readUltrasonic() {
   const uint32_t distanceMicrometers = (highByte << 16) | (middleByte << 8) | lowByte;
   const uint32_t distanceCm = distanceMicrometers / 10000UL;
 
-  ultrasonicValid = distanceCm > 0 && distanceCm < 450;
+  ultrasonicValid = distanceCm > 0 && distanceCm <= ULTRASONIC_MAX_NAV_CM;
   ultrasonicStatus = ultrasonicValid ? ULTRA_STATUS_VALID
                                      : ULTRA_STATUS_OUT_OF_RANGE;
   frontDistanceCm = ultrasonicValid ? static_cast<uint16_t>(distanceCm) : 0xFFFF;
