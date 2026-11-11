@@ -92,7 +92,7 @@ Use a Bluetooth Classic serial-terminal app at 9600 baud, with newline or CRLF l
 | `DIST=45` | Set and save the forward obstacle limit in cm (15-200) |
 | `STATUS` or `?` | Report mode and obstacle limit |
 
-The default forward obstacle limit is 35 cm and is stored in EEPROM after changing it. Movement requests expire; send a new jog command to continue. Turn angles are approximate because the robot has no wheel encoders and gyro-integrated yaw drifts. Tune the floor-distance limit in `BalanceNano.ino` to your sensor mounting height and actual floor readings.
+The default forward obstacle limit is 35 cm and is stored in EEPROM after changing it. The RCWL-9610 is treated as navigation-valid only from 1 to 90 cm; readings above 90 cm, zero readings, read failures, and stale readings are invalid and block forward travel. Movement requests expire; send a new jog command to continue. Turn angles are approximate because the robot has no wheel encoders and gyro-integrated yaw drifts. Tune the floor-distance limit in `BalanceNano.ino` to your sensor mounting height and actual floor readings.
 
 An HC-05 in slave mode waits for the phone to connect; it cannot force a phone to reconnect by itself. Configure the phone app to reconnect to its paired device if that option exists. Most HC-05 breakouts stop accepting another connection while one is active. AT-mode commands vary among clones, so verify the exact module firmware before changing its role or binding settings.
 
