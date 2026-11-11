@@ -282,6 +282,8 @@ void calibrateImu() {
 
 void updateDiagnostics(unsigned long now) {
   const bool up = linkFresh(now);
+  // Diagnostic mode: onboard LED shows Sensor Nano -> Balance Nano link state.
+  digitalWrite(STATUS_LED_PIN, up ? HIGH : LOW);
   if (up != linkWasUp) {
     linkWasUp = up;
     if (up) {
