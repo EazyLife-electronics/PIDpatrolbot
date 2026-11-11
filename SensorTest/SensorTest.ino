@@ -19,9 +19,9 @@ const unsigned long ULTRASONIC_PERIOD_MS = 250;
 const unsigned long ULTRASONIC_CONVERSION_MS = 150;
 const unsigned long LINK_PERIOD_MS = 50;
 // Set to 1 to restore Bluetooth diagnostics after this isolation test.
-#define ENABLE_BLUETOOTH_DIAGNOSTICS 0
+#define ENABLE_BLUETOOTH_DIAGNOSTICS 1
 
-const unsigned long TELEMETRY_PERIOD_MS = 300;
+const unsigned long TELEMETRY_PERIOD_MS = 1000;
 const unsigned long LINK_TIMEOUT_MS = 1000;
 
 // Ultrasonic diagnostic states for Bluetooth testing output.
