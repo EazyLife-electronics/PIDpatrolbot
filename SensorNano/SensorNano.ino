@@ -3,8 +3,8 @@
 #include <VL53L0X.h>
 #include "RobotLink.h"
 
-const uint8_t BT_RX_PIN = 3;
-const uint8_t BT_TX_PIN = 2;
+const uint8_t BT_RX_PIN = 2;
+const uint8_t BT_TX_PIN = 3;
 const uint8_t XSHUT_FRONT_PIN = A2;
 const uint8_t XSHUT_REAR_PIN = A1;
 const uint8_t STATUS_LED_PIN = 13;
@@ -14,6 +14,13 @@ const uint8_t RCWL_ADDRESS = 0x57;
 const uint8_t SENSOR_FLAG_ULTRASONIC = 0x01;
 const uint8_t SENSOR_FLAG_FRONT_FLOOR = 0x02;
 const uint8_t SENSOR_FLAG_REAR_FLOOR = 0x04;
+const uint8_t SENSOR_ULTRA_STATUS_SHIFT = 3;
+const uint8_t SENSOR_ULTRA_STATUS_MASK = 0x38;
+const uint8_t ULTRA_STATUS_VALID = 0;
+const uint8_t ULTRA_STATUS_OUT_OF_RANGE = 1;
+const uint8_t ULTRA_STATUS_TRIGGER_ERROR = 2;
+const uint8_t ULTRA_STATUS_READ_ERROR = 3;
+const uint8_t ULTRA_STATUS_STALE = 4;
 
 const unsigned long TOF_SAMPLE_MS = 70;
 const unsigned long ULTRASONIC_PERIOD_MS = 250;
@@ -35,6 +42,7 @@ bool rearTofReady = false;
 bool frontFloorValid = false;
 bool rearFloorValid = false;
 bool ultrasonicValid = false;
+uint8_t ultrasonicStatus = ULTRA_STATUS_OUT_OF_RANGE;
 bool ultrasonicPending = false;
 unsigned long ultrasonicReadyAt = 0;
 unsigned long lastUltrasonicTriggerAt = 0;
@@ -152,6 +160,7 @@ void sampleFloorSensors(unsigned long now) {
 void updateUltrasonic(unsigned long now) {
   if (ultrasonicValid && now - lastUltrasonicReadAt > ULTRASONIC_STALE_MS) {
     ultrasonicValid = false;
+    ultrasonicStatus = ULTRA_STATUS_STALE;
     frontDistanceCm = 0xFFFF;
   }
   if (ultrasonicPending && static_cast<int32_t>(now - ultrasonicReadyAt) >= 0) {
@@ -171,7 +180,11 @@ void triggerUltrasonic(unsigned long now) {
   const uint8_t result = Wire.endTransmission();
   ultrasonicPending = result == 0;
   ultrasonicReadyAt = now + ULTRASONIC_CONVERSION_MS;
-  if (!ultrasonicPending) { ultrasonicValid = false; frontDistanceCm = 0xFFFF; }
+  if (!ultrasonicPending) {
+    ultrasonicValid = false;
+    ultrasonicStatus = ULTRA_STATUS_TRIGGER_ERROR;
+    frontDistanceCm = 0xFFFF;
+  }
 }
 
 void readUltrasonic() {
@@ -179,6 +192,7 @@ void readUltrasonic() {
   if (received < 3 || Wire.available() < 3) {
     while (Wire.available()) Wire.read();
     ultrasonicValid = false;
+    ultrasonicStatus = ULTRA_STATUS_READ_ERROR;
     frontDistanceCm = 0xFFFF;
     return;
   }
@@ -190,6 +204,8 @@ void readUltrasonic() {
   const uint32_t distanceCm = distanceMicrometers / 10000UL;
 
   ultrasonicValid = distanceCm > 0 && distanceCm < 450;
+  ultrasonicStatus = ultrasonicValid ? ULTRA_STATUS_VALID
+                                     : ULTRA_STATUS_OUT_OF_RANGE;
   frontDistanceCm = ultrasonicValid ? static_cast<uint16_t>(distanceCm) : 0xFFFF;
   if (ultrasonicValid) lastUltrasonicReadAt = millis();
 }
@@ -230,7 +246,8 @@ void sendSensorFrame() {
   uint8_t payload[7];
   payload[0] = (ultrasonicValid ? SENSOR_FLAG_ULTRASONIC : 0) |
                (frontFloorValid ? SENSOR_FLAG_FRONT_FLOOR : 0) |
-               (rearFloorValid ? SENSOR_FLAG_REAR_FLOOR : 0);
+               (rearFloorValid ? SENSOR_FLAG_REAR_FLOOR : 0) |
+               ((ultrasonicStatus << SENSOR_ULTRA_STATUS_SHIFT) & SENSOR_ULTRA_STATUS_MASK);
   linkWriteU16(&payload[1], frontDistanceCm);
   linkWriteU16(&payload[3], frontFloorMm);
   linkWriteU16(&payload[5], rearFloorMm);
