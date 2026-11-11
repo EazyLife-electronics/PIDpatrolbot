@@ -386,7 +386,11 @@ bool motionSafe(int8_t left, int8_t right) {
   if (left * right < 0)
     return floorFrontPresent() && floorRearPresent();
   if (left > 0 || right > 0) {
-    if (!floorFrontPresent() || ultrasonicBlocked()) return false;
+    // Forward motion is blocked when the ultrasonic sensor is missing,
+    // invalid, stale, or reporting an obstacle.
+    if (!floorFrontPresent() ||
+        !(sensorFlags & SENSOR_FLAG_ULTRASONIC) ||
+        frontDistanceCm == 0xFFFF || ultrasonicBlocked()) return false;
   }
   if (left < 0 || right < 0) {
     if (!floorRearPresent()) return false;

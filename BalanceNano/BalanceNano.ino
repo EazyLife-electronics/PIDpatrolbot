@@ -97,15 +97,16 @@ float slew(float target, float current);
 void updateSensorsFromLink();
 void handleCommand(const uint8_t *payload, uint8_t length);
 void sendStatus(const char *message);
-void calibrateImu();
+bool calibrateImu();
 void readImu(float dt);
 void updateBehavior(unsigned long now);
 void runControl(float dt);
-void beginAction(float pitchTarget, float yawDelta, bool turning,
+bool beginAction(float pitchTarget, float yawDelta, bool turning,
                  unsigned long durationMs);
 bool sensorDataFresh(unsigned long now);
 bool floorSafeForForward();
 bool floorSafeForReverse();
+bool ultrasonicClearForForward();
 uint8_t configChecksum(const StoredConfig &config);
 void loadConfig();
 void saveObstacleLimit(uint16_t value);
@@ -145,7 +146,17 @@ void setup() {
   digitalWrite(BUZZER_PIN, HIGH);
   delay(100);
   digitalWrite(BUZZER_PIN, LOW);
-  calibrateImu();
+  if (!calibrateImu()) {
+    sendStatus("ERR IMU CAL");
+    digitalWrite(STBY, LOW);
+    while (true) {
+      stopMotors();
+      digitalWrite(BUZZER_PIN, HIGH);
+      delay(150);
+      digitalWrite(BUZZER_PIN, LOW);
+      delay(850);
+    }
+  }
   lastImuAt = millis();
   targetYaw = yaw;
   digitalWrite(STBY, HIGH);
@@ -221,29 +232,29 @@ void handleCommand(const uint8_t *payload, uint8_t length) {
     targetYaw = yaw;
     sendStatus("OK STOP");
   } else if (!strcmp(command, "FWD") || !strcmp(command, "F")) {
-    beginAction(CRUISE_ANGLE, 0.0f, false, MANUAL_JOG_MS);
-    sendStatus("OK FWD");
+    if (beginAction(CRUISE_ANGLE, 0.0f, false, MANUAL_JOG_MS))
+      sendStatus("OK FWD");
   } else if (!strcmp(command, "REV") || !strcmp(command, "B")) {
-    beginAction(REVERSE_ANGLE, 0.0f, false, MANUAL_JOG_MS);
-    sendStatus("OK REV");
+    if (beginAction(REVERSE_ANGLE, 0.0f, false, MANUAL_JOG_MS))
+      sendStatus("OK REV");
   } else if (!strcmp(command, "LEFT") || !strcmp(command, "L")) {
-    beginAction(CRUISE_ANGLE, -45.0f, true, 1100);
-    sendStatus("OK LEFT ARC");
+    if (beginAction(CRUISE_ANGLE, -45.0f, true, 1100))
+      sendStatus("OK LEFT ARC");
   } else if (!strcmp(command, "RIGHT") || !strcmp(command, "R")) {
-    beginAction(CRUISE_ANGLE, 45.0f, true, 1100);
-    sendStatus("OK RIGHT ARC");
+    if (beginAction(CRUISE_ANGLE, 45.0f, true, 1100))
+      sendStatus("OK RIGHT ARC");
   } else if (!strcmp(command, "PIVOT_L") || !strcmp(command, "PL")) {
-    beginAction(0.0f, -90.0f, true, TURN_TIMEOUT_MS);
-    sendStatus("OK PIVOT LEFT");
+    if (beginAction(0.0f, -90.0f, true, TURN_TIMEOUT_MS))
+      sendStatus("OK PIVOT LEFT");
   } else if (!strcmp(command, "PIVOT_R") || !strcmp(command, "PR")) {
-    beginAction(0.0f, 90.0f, true, TURN_TIMEOUT_MS);
-    sendStatus("OK PIVOT RIGHT");
+    if (beginAction(0.0f, 90.0f, true, TURN_TIMEOUT_MS))
+      sendStatus("OK PIVOT RIGHT");
   } else if (!strcmp(command, "UTURN_L") || !strcmp(command, "UL")) {
-    beginAction(CRUISE_ANGLE, -180.0f, true, 4000);
-    sendStatus("OK UTURN LEFT");
+    if (beginAction(CRUISE_ANGLE, -180.0f, true, 4000))
+      sendStatus("OK UTURN LEFT");
   } else if (!strcmp(command, "UTURN_R") || !strcmp(command, "UR")) {
-    beginAction(CRUISE_ANGLE, 180.0f, true, 4000);
-    sendStatus("OK UTURN RIGHT");
+    if (beginAction(CRUISE_ANGLE, 180.0f, true, 4000))
+      sendStatus("OK UTURN RIGHT");
   } else if (!strncmp(command, "DIST=", 5)) {
     const long requested = atol(command + 5);
     if (requested >= 15 && requested <= 200) {
@@ -263,14 +274,33 @@ void handleCommand(const uint8_t *payload, uint8_t length) {
   }
 }
 
-void beginAction(float pitchTarget, float yawDelta, bool turning,
+bool beginAction(float pitchTarget, float yawDelta, bool turning,
                  unsigned long durationMs) {
+  const bool sensorsFresh = sensorDataFresh(millis());
+  const bool forwardSafe = sensorsFresh && floorSafeForForward() &&
+                           ultrasonicClearForForward();
+  const bool reverseSafe = sensorsFresh && floorSafeForReverse();
+  const bool pivotSafe = sensorsFresh && floorSafeForForward() &&
+                         floorSafeForReverse();
+
+  // Missing or invalid distance data is never interpreted as a clear path.
+  if ((pitchTarget < 0.0f && !forwardSafe) ||
+      (pitchTarget > 0.0f && !reverseSafe) ||
+      (turning && pitchTarget == 0.0f && !pivotSafe)) {
+    action.active = false;
+    targetYaw = yaw;
+    sendStatus("BLOCKED,SENSOR LIMIT");
+    beep(180);
+    return false;
+  }
+
   action.pitchTarget = pitchTarget;
   action.yawTarget = yaw + yawDelta;
   action.turning = turning;
   action.active = true;
   actionExpiresAt = millis() + durationMs;
   if (turning) targetYaw = action.yawTarget;
+  return true;
 }
 
 void updateBehavior(unsigned long now) {
@@ -315,8 +345,10 @@ void updateBehavior(unsigned long now) {
       (SENSOR_FLAG_FRONT_FLOOR | SENSOR_FLAG_REAR_FLOOR);
   const bool frontFloorPresent = edgeSensorsValid && frontFloorMm <= FLOOR_LIMIT_MM;
   const bool rearFloorPresent = edgeSensorsValid && rearFloorMm <= FLOOR_LIMIT_MM;
-  const bool frontBlocked = fresh && (sensorFlags & SENSOR_FLAG_ULTRASONIC) &&
-      frontDistanceCm != 0xFFFF && frontDistanceCm <= obstacleLimitCm;
+  const bool ultrasonicReadingValid = fresh &&
+      (sensorFlags & SENSOR_FLAG_ULTRASONIC) && frontDistanceCm != 0xFFFF;
+  const bool frontBlocked = ultrasonicReadingValid &&
+      frontDistanceCm <= obstacleLimitCm;
   const bool noFloorUnderEitherEnd = edgeSensorsValid &&
       !frontFloorPresent && !rearFloorPresent;
 
@@ -399,15 +431,17 @@ void runControl(float dt) {
       (SENSOR_FLAG_FRONT_FLOOR | SENSOR_FLAG_REAR_FLOOR);
   const bool frontFloorPresent = edgeSensorsValid && frontFloorMm <= FLOOR_LIMIT_MM;
   const bool rearFloorPresent = edgeSensorsValid && rearFloorMm <= FLOOR_LIMIT_MM;
-  const bool frontBlocked = fresh && (sensorFlags & SENSOR_FLAG_ULTRASONIC) &&
-      frontDistanceCm != 0xFFFF && frontDistanceCm <= obstacleLimitCm;
+  const bool ultrasonicReadingValid = fresh &&
+      (sensorFlags & SENSOR_FLAG_ULTRASONIC) && frontDistanceCm != 0xFFFF;
+  const bool frontBlocked = ultrasonicReadingValid &&
+      frontDistanceCm <= obstacleLimitCm;
 
   if (action.active) {
     targetPitch = action.pitchTarget;
     if (action.turning) yawCommand = action.yawTarget;
   } else if (driveMode == MODE_PATROL && fresh && edgeSensorsValid &&
              frontFloorPresent && rearFloorPresent &&
-             (sensorFlags & SENSOR_FLAG_ULTRASONIC) && !frontBlocked) {
+             ultrasonicReadingValid && !frontBlocked) {
     targetPitch = CRUISE_ANGLE;
   }
 
@@ -419,7 +453,8 @@ void runControl(float dt) {
     stopMotors();
     return;
   }
-  if (targetPitch < 0.0f && (!frontFloorPresent || frontBlocked)) {
+  if (targetPitch < 0.0f &&
+      (!frontFloorPresent || !ultrasonicClearForForward() || frontBlocked)) {
     targetPitch = 0.0f;
   }
   if (targetPitch > 0.0f && !rearFloorPresent) {
@@ -462,28 +497,40 @@ bool floorSafeForReverse() {
       (sensorFlags & SENSOR_FLAG_REAR_FLOOR) && rearFloorMm <= FLOOR_LIMIT_MM;
 }
 
-void calibrateImu() {
+bool ultrasonicClearForForward() {
+  return sensorDataFresh(millis()) &&
+      (sensorFlags & SENSOR_FLAG_ULTRASONIC) &&
+      frontDistanceCm != 0xFFFF && frontDistanceCm > obstacleLimitCm;
+}
+
+bool calibrateImu() {
   const uint16_t samples = 400;
-  int32_t sumGY = 0;
-  int32_t sumGZ = 0;
+  int64_t sumGY = 0, sumGZ = 0, sumGY2 = 0, sumGZ2 = 0;
   int32_t sumAX = 0;
   uint16_t goodSamples = 0;
-
   for (uint16_t index = 0; index < samples; index++) {
     int16_t data[6];
     if (bmi160.getAccelGyroData(data) == 0) {
-      sumGY += data[1];
-      sumGZ += data[2];
-      sumAX += data[3];
-      goodSamples++;
+      sumGY += data[1]; sumGZ += data[2];
+      sumGY2 += static_cast<int32_t>(data[1]) * data[1];
+      sumGZ2 += static_cast<int32_t>(data[2]) * data[2];
+      sumAX += data[3]; goodSamples++;
     }
     delay(3);
   }
-
-  if (goodSamples == 0) return;
-  gyroOffsetY = (sumGY / static_cast<float>(goodSamples)) * 0.0305f;
-  gyroOffsetZ = (sumGZ / static_cast<float>(goodSamples)) * 0.0305f;
+  if (goodSamples < (samples * 9U) / 10U) return false;
+  const float meanGY = sumGY / static_cast<float>(goodSamples);
+  const float meanGZ = sumGZ / static_cast<float>(goodSamples);
+  const float varGY = sumGY2 / static_cast<float>(goodSamples) - meanGY * meanGY;
+  const float varGZ = sumGZ2 / static_cast<float>(goodSamples) - meanGZ * meanGZ;
+  const float stdGY = sqrt(varGY > 0.0f ? varGY : 0.0f);
+  const float stdGZ = sqrt(varGZ > 0.0f ? varGZ : 0.0f);
+  if (fabs(meanGY) > 250.0f || fabs(meanGZ) > 250.0f ||
+      stdGY > 80.0f || stdGZ > 80.0f) return false;
+  gyroOffsetY = meanGY * 0.0305f;
+  gyroOffsetZ = meanGZ * 0.0305f;
   accelOffsetX = (sumAX / static_cast<float>(goodSamples)) / 16384.0f;
+  return true;
 }
 
 void readImu(float dt) {

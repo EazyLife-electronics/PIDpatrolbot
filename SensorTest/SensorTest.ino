@@ -64,8 +64,8 @@ void readControllerLink();
 void sendSensorFrame();
 void sendBluetoothTelemetry(unsigned long now);
 void sendLinkCommand(const char *command);
-void appendDistance(char *line, const char *name, bool valid, uint16_t value,
-                    const char *unit);
+void appendDistance(char *line, size_t lineSize, const char *name,
+                    bool valid, uint16_t value, const char *unit);
 
 void setup() {
   pinMode(STATUS_LED_PIN, OUTPUT);
@@ -260,10 +260,11 @@ void sendBluetoothTelemetry(unsigned long now) {
            controllerAuto ? 1 : 0);
   bluetooth.println(line);
 
-  appendDistance(line, "ULTRA", ultrasonicValid, frontDistanceCm, "cm");
+  appendDistance(line, sizeof(line), "ULTRA", ultrasonicValid, frontDistanceCm, "cm");
   bluetooth.println(line);
-  appendDistance(line, "FLOOR_F", frontFloorValid, frontFloorMm, "mm");
-  appendDistance(line, "FLOOR_R", rearFloorValid, rearFloorMm, "mm");
+  appendDistance(line, sizeof(line), "FLOOR_F", frontFloorValid, frontFloorMm, "mm");
+  bluetooth.println(line);
+  appendDistance(line, sizeof(line), "FLOOR_R", rearFloorValid, rearFloorMm, "mm");
   bluetooth.println(line);
 
   snprintf(line, sizeof(line), "GYRO,P:%d.%02u,PR:%d.%02u,YR:%d.%02u",
@@ -277,12 +278,12 @@ const char *imuStateLabel() {
   return controllerImuReady ? "OK" : "ERR";
 }
 
-void appendDistance(char *line, const char *name, bool valid, uint16_t value,
-                    const char *unit) {
-  snprintf(line, sizeof(line), "%s,%s:%s", name, valid ? "OK" : "ERR",
+void appendDistance(char *line, size_t lineSize, const char *name,
+                    bool valid, uint16_t value, const char *unit) {
+  snprintf(line, lineSize, "%s,%s:%s", name, valid ? "OK" : "ERR",
            valid ? "" : "NA");
   if (valid) {
     const size_t used = strlen(line);
-    snprintf(line + used, sizeof(line) - used, "%u%s", value, unit);
+    snprintf(line + used, lineSize - used, "%u%s", value, unit);
   }
 }
