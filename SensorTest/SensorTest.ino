@@ -23,6 +23,7 @@ const unsigned long LINK_PERIOD_MS = 50;
 
 const unsigned long TELEMETRY_PERIOD_MS = 2000;
 const unsigned long LINK_TIMEOUT_MS = 1000;
+const uint16_t ULTRASONIC_MAX_NAV_CM = 90;
 
 // Ultrasonic diagnostic states for Bluetooth testing output.
 const uint8_t ULTRA_DIAG_OK = 0;
@@ -217,7 +218,7 @@ void readUltrasonic() {
   const uint32_t distanceMicrometers = (highByte << 16) | (middleByte << 8) | lowByte;
   ultrasonicRawMicrometers = distanceMicrometers;
   const uint32_t distanceCm = distanceMicrometers / 10000UL;
-  ultrasonicValid = distanceCm > 0 && distanceCm < 450;
+  ultrasonicValid = distanceCm > 0 && distanceCm <= ULTRASONIC_MAX_NAV_CM;
   frontDistanceCm = ultrasonicValid ? static_cast<uint16_t>(distanceCm) : 0xFFFF;
   ultrasonicDiagState = ultrasonicValid ? ULTRA_DIAG_OK : ULTRA_DIAG_INVALID;
 }
