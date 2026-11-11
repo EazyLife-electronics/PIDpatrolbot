@@ -106,6 +106,10 @@ void loop() {
   readBluetoothCommands();
 #endif
   readControllerLink();
+  // Diagnostic mode: onboard LED shows Balance Nano -> Sensor Nano link state.
+  digitalWrite(STATUS_LED_PIN,
+               controllerSeen && now - lastControllerFrameAt <= LINK_TIMEOUT_MS
+                   ? HIGH : LOW);
   sampleFloorSensors(now);
   updateUltrasonic(now);
 
