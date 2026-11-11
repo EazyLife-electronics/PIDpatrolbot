@@ -9,11 +9,11 @@ This version uses two classic Nano/ATmega328P boards. The balance Nano owns the 
 | Signal | Nano pin |
 | --- | --- |
 | TB6612 PWMA | D5 (PWM) |
-| TB6612 AIN1 | D2 |
-| TB6612 AIN2 | D3 |
+| TB6612 AIN1 | D3 |
+| TB6612 AIN2 | D2 |
 | TB6612 PWMB | D6 (PWM) |
-| TB6612 BIN1 | D4 |
-| TB6612 BIN2 | D7 |
+| TB6612 BIN1 | A2 |
+| TB6612 BIN2 | A1 |
 | TB6612 STBY | D8 |
 | Buzzer | D12 |
 | Onboard status LED | D13 (held HIGH) |
@@ -26,10 +26,10 @@ This version uses two classic Nano/ATmega328P boards. The balance Nano owns the 
 | Signal | Nano pin |
 | --- | --- |
 | UART to balance Nano RX / TX | D0 / D1 |
-| HC-05 TX to Nano RX | D2 |
-| Nano TX to HC-05 RX | D3 through a 5 V-to-3.3 V divider unless the breakout explicitly includes level shifting |
-| Front floor sensor XSHUT | D4 |
-| Rear floor sensor XSHUT | D5 |
+| HC-05 TX to Nano RX | D3 |
+| Nano TX to HC-05 RX | D2 through a 5 V-to-3.3 V divider unless the breakout explicitly includes level shifting |
+| Front floor sensor XSHUT | A2 |
+| Rear floor sensor XSHUT | A1 |
 | Onboard status LED | D13 (held HIGH) |
 | Both ToFs, RCWL-9610 SDA / SCL | A4 / A5 |
 | Sensor Nano I2C addresses | Front ToF `0x30`, rear ToF `0x31`, RCWL-9610 `0x57` |
@@ -47,8 +47,8 @@ These pins have fixed roles in the current design:
 | A4 / A5 on both Nanos | Hardware I2C (`Wire`) for the BMI160 on the balance Nano and ToF/RCWL sensors on the sensor Nano |
 | D0 / D1 on both Nanos | Hardware UART for the inter-Nano link and also the Nano bootloader/USB serial connection |
 | D13 on both Nanos | Reserved as the onboard status LED output, held HIGH from startup |
-| Sensor Nano D2 | HC-05 receive input for `SoftwareSerial`; if moved, choose another unused pin supported by AVR pin-change interrupts and update `BT_RX_PIN` |
-| Sensor Nano D3 | HC-05 transmit output; if moved, update `BT_TX_PIN` and preserve the voltage divider/level shifting on the Nano-to-HC-05 RX line |
+| Sensor Nano D3 | HC-05 receive input for `SoftwareSerial`; if moved, choose another unused pin supported by AVR pin-change interrupts and update `BT_RX_PIN` |
+| Sensor Nano D2 | HC-05 transmit output; if moved, update `BT_TX_PIN` and preserve the voltage divider/level shifting on the Nano-to-HC-05 RX line |
 
 PWM can only move to hardware PWM pins: D3, D5, D6, D9, D10, or D11. The current balance sketch uses D5/D6, which are Timer0 PWM outputs. Timer0 also provides Arduino `millis()`/`micros()`; ordinary `analogWrite()` on D5/D6 is fine, but do not reconfigure Timer0 if the control timing is needed. D9/D10 use Timer1 and are available in this firmware, but adding a library such as `Servo` may claim Timer1 and change that. The balance loop itself is scheduled with `micros()`; it does not reserve a hardware timer output pin.
 
@@ -98,7 +98,7 @@ An HC-05 in slave mode waits for the phone to connect; it cannot force a phone t
 
 ## Safety Behavior And Limits
 
-The balance loop runs on the balance Nano and never waits for a sensor read or Bluetooth command. If the sensor packet is stale or a required sensor is invalid, commanded travel is suppressed while the controller continues balancing. Forward travel requires a valid front floor reading and a valid ultrasonic reading above the configured limit; reverse travel requires a valid rear floor reading. A fixed-point pivot is blocked if either floor sensor sees an edge. If both floor sensors report no floor for the confirmation interval, motor standby is disabled and the fault latches until power is cycled.
+The balance loop runs on the balance Nano and never waits for a sensor read or Bluetooth command. If the sensor packet is stale or a required sensor is invalid, commanded travel is suppressed while the controller continues balancing. Forward travel requires fresh front-floor data and a valid ultrasonic reading above the configured limit; missing, invalid, or expired ultrasonic data is treated as blocked, not as a clear path. Reverse travel requires valid rear-floor data. A fixed-point pivot requires both floor sensors to confirm floor. The sensor Nano expires ultrasonic readings after 750 ms without a successful measurement and retries failed ToF initialization/timeouts. The balance Nano rejects IMU calibration if too few samples arrive or gyro data indicates excessive movement/vibration; keep the robot still during startup. If both floor sensors report no floor for the confirmation interval, motor standby is disabled and the fault latches until power is cycled.
 
 The forward ultrasonic module does not protect the rear from collision while reversing. There are no wheel encoders, no measured stopping distance, and no certified safety controller. The floor threshold, PID gains, motor polarity, recovery behavior, and Bluetooth connection loss behavior require restrained tests in a clear, padded area. Do not test around people, stairs, pets, traffic, or fragile objects.
 
