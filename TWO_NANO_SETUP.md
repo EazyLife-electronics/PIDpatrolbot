@@ -26,8 +26,8 @@ This version uses two classic Nano/ATmega328P boards. The balance Nano owns the 
 | Signal | Nano pin |
 | --- | --- |
 | UART to balance Nano RX / TX | D0 / D1 |
-| HC-05 TX to Nano RX | D3 |
-| Nano TX to HC-05 RX | D2 through a 5 V-to-3.3 V divider unless the breakout explicitly includes level shifting |
+| HC-05 TX to Nano RX | D2 |
+| Nano TX to HC-05 RX | D3 through a 5 V-to-3.3 V divider unless the breakout explicitly includes level shifting |
 | Front floor sensor XSHUT | A2 |
 | Rear floor sensor XSHUT | A1 |
 | Onboard status LED | D13 (held HIGH) |
@@ -47,8 +47,8 @@ These pins have fixed roles in the current design:
 | A4 / A5 on both Nanos | Hardware I2C (`Wire`) for the BMI160 on the balance Nano and ToF/RCWL sensors on the sensor Nano |
 | D0 / D1 on both Nanos | Hardware UART for the inter-Nano link and also the Nano bootloader/USB serial connection |
 | D13 on both Nanos | Reserved as the onboard status LED output, held HIGH from startup |
-| Sensor Nano D3 | HC-05 receive input for `SoftwareSerial`; if moved, choose another unused pin supported by AVR pin-change interrupts and update `BT_RX_PIN` |
-| Sensor Nano D2 | HC-05 transmit output; if moved, update `BT_TX_PIN` and preserve the voltage divider/level shifting on the Nano-to-HC-05 RX line |
+| Sensor Nano D2 | HC-05 receive input for `SoftwareSerial`; if moved, choose another unused pin supported by AVR pin-change interrupts and update `BT_RX_PIN` |
+| Sensor Nano D3 | HC-05 transmit output; if moved, update `BT_TX_PIN` and preserve the voltage divider/level shifting on the Nano-to-HC-05 RX line |
 
 PWM can only move to hardware PWM pins: D3, D5, D6, D9, D10, or D11. The current balance sketch uses D5/D6, which are Timer0 PWM outputs. Timer0 also provides Arduino `millis()`/`micros()`; ordinary `analogWrite()` on D5/D6 is fine, but do not reconfigure Timer0 if the control timing is needed. D9/D10 use Timer1 and are available in this firmware, but adding a library such as `Servo` may claim Timer1 and change that. The balance loop itself is scheduled with `micros()`; it does not reserve a hardware timer output pin.
 
