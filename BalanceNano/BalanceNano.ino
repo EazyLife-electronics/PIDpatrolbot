@@ -39,13 +39,13 @@ const bool LATCH_SURFACE_LOST_FAULT = false;
 DFRobot_BMI160 bmi160;
 LinkParser linkParser;
 
-float Kp_angle = 42.0f;
+float Kp_angle = 35.0f;
 float Ki_angle = 0.8f;
 float Kd_angle = 7.2f;
 float Kp_yaw = 1.9f;
 float Kd_yaw = 0.35f;
 const float ALPHA = 0.985f;
-const int DEADZONE = 26;
+const int DEADZONE = 22;
 const float MAX_SLEW = 8.5f;
 const int MAX_PWM = 210;
 const float CRUISE_ANGLE = -1.6f;
