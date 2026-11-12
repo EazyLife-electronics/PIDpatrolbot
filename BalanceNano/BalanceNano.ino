@@ -75,6 +75,7 @@ unsigned long actionExpiresAt = 0;
 unsigned long overAngleSince = 0;
 unsigned long buzzerOffAt = 0;
 unsigned long lastControlDiagAt = 0;
+uint8_t controlDiagIndex = 0;
 
 float diagnosticAngleOut = 0.0f;
 float diagnosticLeftOut = 0.0f;
@@ -591,38 +592,51 @@ void runControl(float dt) {
 }
 
 void sendControlDiagnostics(unsigned long now) {
-  // Four short messages stay within RobotLink's 20-byte payload limit.
+  // SoftwareSerial on the Sensor Nano cannot receive Bluetooth bytes while
+  // transmitting. Send one compact diagnostic frame per interval instead
+  // of bursting four frames together and blocking the sensor-node loop.
   if (now - lastControlDiagAt < 250) return;
   lastControlDiagAt = now;
 
   char message[LINK_MAX_PAYLOAD + 1];
-  snprintf(message, sizeof(message), "P:%d,G:%d",
-           static_cast<int>(pitch * 10.0f),
-           static_cast<int>(pitchRate * 10.0f));
-  sendStatus(message);
+  switch (controlDiagIndex) {
+    case 0:
+      snprintf(message, sizeof(message), "P:%d,G:%d",
+               static_cast<int>(pitch * 10.0f),
+               static_cast<int>(pitchRate * 10.0f));
+      break;
 
-  snprintf(message, sizeof(message), "A:%d,L:%d,R:%d",
-           static_cast<int>(constrain(diagnosticAngleOut, -999.0f, 999.0f)),
-           static_cast<int>(constrain(diagnosticLeftOut, -999.0f, 999.0f)),
-           static_cast<int>(constrain(diagnosticRightOut, -999.0f, 999.0f)));
-  sendStatus(message);
+    case 1:
+      snprintf(message, sizeof(message), "A:%d,L:%d,R:%d",
+               static_cast<int>(constrain(diagnosticAngleOut, -999.0f, 999.0f)),
+               static_cast<int>(constrain(diagnosticLeftOut, -999.0f, 999.0f)),
+               static_cast<int>(constrain(diagnosticRightOut, -999.0f, 999.0f)));
+      break;
 
-  const bool fresh = sensorDataFresh(now);
-  const bool frontSafe = fresh &&
-      (sensorFlags & SENSOR_FLAG_FRONT_FLOOR) &&
-      frontFloorMm <= FLOOR_LIMIT_MM;
-  const bool rearSafe = fresh &&
-      (sensorFlags & SENSOR_FLAG_REAR_FLOOR) &&
-      rearFloorMm <= FLOOR_LIMIT_MM;
-  snprintf(message, sizeof(message), "ST:%d,S:%d,F:%d,R:%d",
-           digitalRead(STBY), fresh ? 1 : 0,
-           frontSafe ? 1 : 0, rearSafe ? 1 : 0);
-  sendStatus(message);
+    case 2: {
+      const bool fresh = sensorDataFresh(now);
+      const bool frontSafe = fresh &&
+          (sensorFlags & SENSOR_FLAG_FRONT_FLOOR) &&
+          frontFloorMm <= FLOOR_LIMIT_MM;
+      const bool rearSafe = fresh &&
+          (sensorFlags & SENSOR_FLAG_REAR_FLOOR) &&
+          rearFloorMm <= FLOOR_LIMIT_MM;
+      snprintf(message, sizeof(message), "ST:%d,S:%d,F:%d,R:%d",
+               digitalRead(STBY), fresh ? 1 : 0,
+               frontSafe ? 1 : 0, rearSafe ? 1 : 0);
+      break;
+    }
 
-  const unsigned long imuAge = now - lastImuAt;
-  snprintf(message, sizeof(message), "IMU:%u,SL:%d,CF:%d",
-           static_cast<unsigned int>(imuAge > 999 ? 999 : imuAge),
-           surfaceLost ? 1 : 0, controllerFault ? 1 : 0);
+    default: {
+      const unsigned long imuAge = now - lastImuAt;
+      snprintf(message, sizeof(message), "IMU:%u,SL:%d,CF:%d",
+               static_cast<unsigned int>(imuAge > 999 ? 999 : imuAge),
+               surfaceLost ? 1 : 0, controllerFault ? 1 : 0);
+      break;
+    }
+  }
+
+  controlDiagIndex = (controlDiagIndex + 1) & 0x03;
   sendStatus(message);
 }
 
