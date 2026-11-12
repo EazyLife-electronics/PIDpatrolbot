@@ -39,9 +39,9 @@ const bool LATCH_SURFACE_LOST_FAULT = false;
 DFRobot_BMI160 bmi160;
 LinkParser linkParser;
 
-float Kp_angle = 28.0f;
-float Ki_angle = 0.55f;
-float Kd_angle = 1.45f;
+float Kp_angle = 35.0f;
+float Ki_angle = 0.8f;
+float Kd_angle = 7.2f;
 float Kp_yaw = 1.9f;
 float Kd_yaw = 0.35f;
 const float ALPHA = 0.985f;
@@ -50,6 +50,7 @@ const float MAX_SLEW = 8.5f;
 const int MAX_PWM = 210;
 const float CRUISE_ANGLE = -1.6f;
 const float REVERSE_ANGLE = 1.6f;
+const float PITCH_CLEARANCE_DEG = 2.0f;
 
 float pitch = 0.0f;
 float yaw = 0.0f;
@@ -74,6 +75,7 @@ unsigned long actionExpiresAt = 0;
 unsigned long overAngleSince = 0;
 unsigned long buzzerOffAt = 0;
 unsigned long lastControlDiagAt = 0;
+uint8_t controlDiagIndex = 0;
 
 float diagnosticAngleOut = 0.0f;
 float diagnosticLeftOut = 0.0f;
@@ -265,31 +267,40 @@ void handleCommand(const uint8_t *payload, uint8_t length) {
     sendStatus("OK PATROL");
     beep(70);
   } else if (!strcmp(command, "STOP") || !strcmp(command, "S")) {
+    driveMode = MODE_MANUAL;
     action.active = false;
     targetYaw = yaw;
     sendStatus("OK STOP");
   } else if (!strcmp(command, "FWD") || !strcmp(command, "F")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, 0.0f, false, MANUAL_JOG_MS))
       sendStatus("OK FWD");
   } else if (!strcmp(command, "REV") || !strcmp(command, "B")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(REVERSE_ANGLE, 0.0f, false, MANUAL_JOG_MS))
       sendStatus("OK REV");
   } else if (!strcmp(command, "LEFT") || !strcmp(command, "L")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, -45.0f, true, 1100))
       sendStatus("OK LEFT ARC");
   } else if (!strcmp(command, "RIGHT") || !strcmp(command, "R")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, 45.0f, true, 1100))
       sendStatus("OK RIGHT ARC");
   } else if (!strcmp(command, "PIVOT_L") || !strcmp(command, "PL")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(0.0f, -90.0f, true, TURN_TIMEOUT_MS))
       sendStatus("OK PIVOT LEFT");
   } else if (!strcmp(command, "PIVOT_R") || !strcmp(command, "PR")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(0.0f, 90.0f, true, TURN_TIMEOUT_MS))
       sendStatus("OK PIVOT RIGHT");
   } else if (!strcmp(command, "UTURN_L") || !strcmp(command, "UL")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, -180.0f, true, 4000))
       sendStatus("OK UTURN LEFT");
   } else if (!strcmp(command, "UTURN_R") || !strcmp(command, "UR")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, 180.0f, true, 4000))
       sendStatus("OK UTURN RIGHT");
   } else if (!strncmp(command, "DIST=", 5)) {
@@ -546,9 +557,31 @@ void runControl(float dt) {
     yawCommand = yaw;
   }
 
-  const float error = targetPitch - pitch;
-  integralAngle += error * dt;
-  integralAngle = constrain(integralAngle, -22.0f, 22.0f);
+  // Apply a soft +/-2 degree clearance only around the upright
+  // target. Movement targets bypass this clearance so small drive
+  // commands (for example +/-1.6 degrees) are not swallowed.
+  // The derivative term remains active inside the clearance to damp
+  // angular motion and preserve balance response.
+  const float rawAngleError = targetPitch - pitch;
+  float error = rawAngleError;
+  const bool inUprightClearance =
+      fabs(targetPitch) < 0.01f && fabs(rawAngleError) <= PITCH_CLEARANCE_DEG;
+
+  if (fabs(targetPitch) < 0.01f) {
+    if (inUprightClearance) {
+      error = 0.0f;
+      integralAngle = 0.0f;
+    } else {
+      // Subtract the clearance instead of abruptly applying the full
+      // angle error at the boundary.
+      error -= (error > 0.0f ? PITCH_CLEARANCE_DEG : -PITCH_CLEARANCE_DEG);
+    }
+  }
+
+  if (!inUprightClearance) {
+    integralAngle += error * dt;
+    integralAngle = constrain(integralAngle, -22.0f, 22.0f);
+  }
   filteredD = 0.78f * filteredD - 0.22f * pitchRate;
   const float angleOut = Kp_angle * error + Ki_angle * integralAngle +
                          Kd_angle * filteredD;
@@ -568,38 +601,51 @@ void runControl(float dt) {
 }
 
 void sendControlDiagnostics(unsigned long now) {
-  // Four short messages stay within RobotLink's 20-byte payload limit.
+  // SoftwareSerial on the Sensor Nano cannot receive Bluetooth bytes while
+  // transmitting. Send one compact diagnostic frame per interval instead
+  // of bursting four frames together and blocking the sensor-node loop.
   if (now - lastControlDiagAt < 250) return;
   lastControlDiagAt = now;
 
   char message[LINK_MAX_PAYLOAD + 1];
-  snprintf(message, sizeof(message), "P:%d,G:%d",
-           static_cast<int>(pitch * 10.0f),
-           static_cast<int>(pitchRate * 10.0f));
-  sendStatus(message);
+  switch (controlDiagIndex) {
+    case 0:
+      snprintf(message, sizeof(message), "P:%d,G:%d",
+               static_cast<int>(pitch * 10.0f),
+               static_cast<int>(pitchRate * 10.0f));
+      break;
 
-  snprintf(message, sizeof(message), "A:%d,L:%d,R:%d",
-           static_cast<int>(constrain(diagnosticAngleOut, -999.0f, 999.0f)),
-           static_cast<int>(constrain(diagnosticLeftOut, -999.0f, 999.0f)),
-           static_cast<int>(constrain(diagnosticRightOut, -999.0f, 999.0f)));
-  sendStatus(message);
+    case 1:
+      snprintf(message, sizeof(message), "A:%d,L:%d,R:%d",
+               static_cast<int>(constrain(diagnosticAngleOut, -999.0f, 999.0f)),
+               static_cast<int>(constrain(diagnosticLeftOut, -999.0f, 999.0f)),
+               static_cast<int>(constrain(diagnosticRightOut, -999.0f, 999.0f)));
+      break;
 
-  const bool fresh = sensorDataFresh(now);
-  const bool frontSafe = fresh &&
-      (sensorFlags & SENSOR_FLAG_FRONT_FLOOR) &&
-      frontFloorMm <= FLOOR_LIMIT_MM;
-  const bool rearSafe = fresh &&
-      (sensorFlags & SENSOR_FLAG_REAR_FLOOR) &&
-      rearFloorMm <= FLOOR_LIMIT_MM;
-  snprintf(message, sizeof(message), "ST:%d,S:%d,F:%d,R:%d",
-           digitalRead(STBY), fresh ? 1 : 0,
-           frontSafe ? 1 : 0, rearSafe ? 1 : 0);
-  sendStatus(message);
+    case 2: {
+      const bool fresh = sensorDataFresh(now);
+      const bool frontSafe = fresh &&
+          (sensorFlags & SENSOR_FLAG_FRONT_FLOOR) &&
+          frontFloorMm <= FLOOR_LIMIT_MM;
+      const bool rearSafe = fresh &&
+          (sensorFlags & SENSOR_FLAG_REAR_FLOOR) &&
+          rearFloorMm <= FLOOR_LIMIT_MM;
+      snprintf(message, sizeof(message), "ST:%d,S:%d,F:%d,R:%d",
+               digitalRead(STBY), fresh ? 1 : 0,
+               frontSafe ? 1 : 0, rearSafe ? 1 : 0);
+      break;
+    }
 
-  const unsigned long imuAge = now - lastImuAt;
-  snprintf(message, sizeof(message), "IMU:%u,SL:%d,CF:%d",
-           static_cast<unsigned int>(imuAge > 999 ? 999 : imuAge),
-           surfaceLost ? 1 : 0, controllerFault ? 1 : 0);
+    default: {
+      const unsigned long imuAge = now - lastImuAt;
+      snprintf(message, sizeof(message), "IMU:%u,SL:%d,CF:%d",
+               static_cast<unsigned int>(imuAge > 999 ? 999 : imuAge),
+               surfaceLost ? 1 : 0, controllerFault ? 1 : 0);
+      break;
+    }
+  }
+
+  controlDiagIndex = (controlDiagIndex + 1) & 0x03;
   sendStatus(message);
 }
 
