@@ -39,17 +39,18 @@ const bool LATCH_SURFACE_LOST_FAULT = false;
 DFRobot_BMI160 bmi160;
 LinkParser linkParser;
 
-float Kp_angle = 28.0f;
-float Ki_angle = 0.55f;
-float Kd_angle = 1.45f;
+float Kp_angle = 42.0f;
+float Ki_angle = 0.8f;
+float Kd_angle = 7.2f;
 float Kp_yaw = 1.9f;
 float Kd_yaw = 0.35f;
 const float ALPHA = 0.985f;
-const int DEADZONE = 22;
+const int DEADZONE = 26;
 const float MAX_SLEW = 8.5f;
 const int MAX_PWM = 210;
 const float CRUISE_ANGLE = -1.6f;
 const float REVERSE_ANGLE = 1.6f;
+const float PITCH_CLEARANCE_DEG = 2.0f;
 
 float pitch = 0.0f;
 float yaw = 0.0f;
@@ -546,7 +547,20 @@ void runControl(float dt) {
     yawCommand = yaw;
   }
 
-  const float error = targetPitch - pitch;
+  // Apply a soft +/-2 degree clearance only around the upright
+  // target. Movement targets bypass this clearance so small drive
+  // commands (for example +/-1.6 degrees) are not swallowed.
+  // The derivative term remains active inside the clearance to damp
+  // angular motion and preserve balance response.
+  const float rawAngleError = targetPitch - pitch;
+  float error = rawAngleError;
+  if (fabs(targetPitch) < 0.01f) {
+    if (fabs(error) <= PITCH_CLEARANCE_DEG) {
+      error = 0.0f;
+    } else {
+      error -= (error > 0.0f ? PITCH_CLEARANCE_DEG : -PITCH_CLEARANCE_DEG);
+    }
+  }
   integralAngle += error * dt;
   integralAngle = constrain(integralAngle, -22.0f, 22.0f);
   filteredD = 0.78f * filteredD - 0.22f * pitchRate;
