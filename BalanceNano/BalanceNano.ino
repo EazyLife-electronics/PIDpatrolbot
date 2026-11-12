@@ -554,15 +554,24 @@ void runControl(float dt) {
   // angular motion and preserve balance response.
   const float rawAngleError = targetPitch - pitch;
   float error = rawAngleError;
+  const bool inUprightClearance =
+      fabs(targetPitch) < 0.01f && fabs(rawAngleError) <= PITCH_CLEARANCE_DEG;
+
   if (fabs(targetPitch) < 0.01f) {
-    if (fabs(error) <= PITCH_CLEARANCE_DEG) {
+    if (inUprightClearance) {
       error = 0.0f;
+      integralAngle = 0.0f;
     } else {
+      // Subtract the clearance instead of abruptly applying the full
+      // angle error at the boundary.
       error -= (error > 0.0f ? PITCH_CLEARANCE_DEG : -PITCH_CLEARANCE_DEG);
     }
   }
-  integralAngle += error * dt;
-  integralAngle = constrain(integralAngle, -22.0f, 22.0f);
+
+  if (!inUprightClearance) {
+    integralAngle += error * dt;
+    integralAngle = constrain(integralAngle, -22.0f, 22.0f);
+  }
   filteredD = 0.78f * filteredD - 0.22f * pitchRate;
   const float angleOut = Kp_angle * error + Ki_angle * integralAngle +
                          Kd_angle * filteredD;
