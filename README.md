@@ -1,53 +1,59 @@
 # PIDpatrolbot
 
-Two-Arduino-Nano self-balancing patrol robot.
+Two-classic-Nano self-balancing patrol robot.
 
-## Firmware architecture
-- **BalanceNano/** — BMI160, TB6612FNG motor control, balance/PID loop, movement safety checks, patrol behavior, and EEPROM obstacle-distance setting.
-- **SensorNano/** — front/rear VL53L0X floor sensing, RCWL-9610 front distance sensing, HC-05 Bluetooth bridge, and inter-Nano sensor packets.
-- **BalanceTest/** and **SensorTest/** — bench diagnostics, not production balance firmware.
-- **RobotLink.h** — packet framing shared by the two nodes. Keep production copies synchronized.
+## Ready firmware
 
-## Authoritative wiring
-Pin constants in the production sketches are authoritative. These references match those constants:
-- [Two-Nano setup and pin table](TWO_NANO_SETUP.md)
-- [Wiring diagram (SVG)](Two_Nano_Wiring.svg)
+- **Balance Nano firmware:** BalanceNano/BalanceNano.ino — BMI160 pitch estimation, self-balancing PID, TB6612FNG motor control, yaw/movement commands, sensor safety, patrol mode, and EEPROM obstacle-distance setting.
+- **Sensor Nano firmware:** SensorNano/SensorNano.ino — two VL53L0X floor sensors, RCWL-9610 front distance sensor, HC-05 Bluetooth bridge, and inter-Nano communication.
+- **Link headers:** BalanceNano/RobotLink.h and SensorNano/RobotLink.h — matching packet protocol. Keep both copies identical.
+- **Wiring:** TWO_NANO_SETUP.md and Two_Nano_Wiring.svg.
+- **Upload and calibration:** CALIBRATION_GUIDE.md.
+- **Testing and commands:** TESTING_GUIDE.md.
 
-### Balance Nano
-| Function | Pin |
-| --- | --- |
-| TB6612 PWMA / AIN1 / AIN2 | D5 / D3 / D2 |
-| TB6612 PWMB / BIN1 / BIN2 | D6 / A2 / A1 |
-| TB6612 STBY | D8 |
-| Buzzer / status LED | D12 / D13 |
-| BMI160 SDA / SCL | A4 / A5 |
-| Inter-Nano UART RX / TX | D0 / D1 |
+BalanceTest/ and SensorTest/ are optional diagnostic sketches. They are not required for normal operation. Use the two production sketches above for normal robot operation.
 
-### Sensor Nano
-| Function | Pin |
-| --- | --- |
-| HC-05 SoftwareSerial RX / TX | D2 / D3 |
-| Front / rear VL53L0X XSHUT | A2 / A1 |
-| Status LED | D13 |
-| Shared sensor I2C SDA / SCL | A4 / A5 |
-| Inter-Nano UART RX / TX | D0 / D1 |
+## Current calibration starting point
 
-## Testing
-Follow the [step-by-step testing guide](TESTING_GUIDE.md) to test SensorTest and BalanceTest in order, verify sensor readings and the inter-Nano link, check safety responses, and then restore the production firmware.
+| Setting | Value |
+| --- | ---: |
+| Pitch Kp | 35.0 |
+| Pitch Ki | 0.8 |
+| Pitch Kd | 7.2 |
+| Upright clearance | 2.0° |
+| Motor minimum PWM | 22 |
+| Maximum PWM | 210 |
+| Motor slew step | 8.5 |
+
+These are starting values for physical calibration, not a claim that the robot is already perfectly tuned. Keep the gains in BalanceNano/BalanceNano.ino as the single tuning location.
+
+## Communication
+
+- Inter-Nano hardware UART: **38400 baud**, crossed D1/D0, common GND.
+- HC-05 Bluetooth serial: **9600 baud**, newline-terminated commands.
+- Binary inter-Nano packets: A5 5A, type, sequence, payload length, payload (maximum 20 bytes), CRC-8 (polynomial 0x07).
+- The parser discards malformed or incomplete packets and resets after a 20 ms inter-byte gap.
+- Sensor frames are sent every 50 ms. Balance diagnostics are deliberately paced to avoid long bursts over the Sensor Nano SoftwareSerial Bluetooth connection.
+- Upload both production sketches from the same branch/revision. The two RobotLink.h files must match.
 
 ## Build
-Install the Arduino AVR Nano core, DFRobot_BMI160, and Pololu VL53L0X. Compile each sketch for the classic Nano / ATmega328P:
 
-```sh
+Install the Arduino AVR Nano core and these libraries:
+
+- DFRobot_BMI160
+- Pololu VL53L0X (1.3.1)
+
+Compile from the repository root:
+
+~~~sh
 arduino-cli compile --fqbn arduino:avr:nano BalanceNano
 arduino-cli compile --fqbn arduino:avr:nano SensorNano
-arduino-cli compile --fqbn arduino:avr:nano BalanceTest
-arduino-cli compile --fqbn arduino:avr:nano SensorTest
-```
+~~~
 
-The two production sketches each contain a copy of `RobotLink.h`; update both copies together if the protocol changes.
+Some classic Nano clones require **ATmega328P (Old Bootloader)** in the IDE. Disconnect both D0/D1 inter-Nano wires from the Nano being uploaded, then reconnect with power off.
 
 ## Safety
-Forward movement requires fresh floor data and a valid ultrasonic reading beyond the obstacle limit. Missing or expired ultrasonic data blocks forward travel. Reverse movement requires a valid rear floor reading; pivoting requires both floor sensors to confirm floor. The sensor node retries failed ToF initialization and expires stale ultrasonic measurements. The balance node refuses startup if IMU calibration is incomplete or unstable.
 
-This is an experimental robot, not a certified safety system. Test restrained first, keep motor power disconnectable, and only progress to low-speed trials in a clear, padded area away from people, stairs, pets, and fragile objects.
+Forward travel requires fresh front-floor data and a valid ultrasonic reading beyond the obstacle limit. Missing, invalid, or stale distance data blocks forward travel. Reverse requires valid rear-floor data; fixed-point pivots require both floor sensors. Loss of sensor data cancels travel commands while the balance loop continues. A confirmed loss of floor under both ends disables the motor driver; automatic recovery is permitted only after both floor readings are valid and safe for the recovery interval.
+
+This is experimental hardware, not a certified safety system. Keep a physical motor-power disconnect within reach. Complete the restrained checks in the guides before a low-speed floor trial.
