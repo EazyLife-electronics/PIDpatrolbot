@@ -267,31 +267,40 @@ void handleCommand(const uint8_t *payload, uint8_t length) {
     sendStatus("OK PATROL");
     beep(70);
   } else if (!strcmp(command, "STOP") || !strcmp(command, "S")) {
+    driveMode = MODE_MANUAL;
     action.active = false;
     targetYaw = yaw;
     sendStatus("OK STOP");
   } else if (!strcmp(command, "FWD") || !strcmp(command, "F")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, 0.0f, false, MANUAL_JOG_MS))
       sendStatus("OK FWD");
   } else if (!strcmp(command, "REV") || !strcmp(command, "B")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(REVERSE_ANGLE, 0.0f, false, MANUAL_JOG_MS))
       sendStatus("OK REV");
   } else if (!strcmp(command, "LEFT") || !strcmp(command, "L")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, -45.0f, true, 1100))
       sendStatus("OK LEFT ARC");
   } else if (!strcmp(command, "RIGHT") || !strcmp(command, "R")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, 45.0f, true, 1100))
       sendStatus("OK RIGHT ARC");
   } else if (!strcmp(command, "PIVOT_L") || !strcmp(command, "PL")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(0.0f, -90.0f, true, TURN_TIMEOUT_MS))
       sendStatus("OK PIVOT LEFT");
   } else if (!strcmp(command, "PIVOT_R") || !strcmp(command, "PR")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(0.0f, 90.0f, true, TURN_TIMEOUT_MS))
       sendStatus("OK PIVOT RIGHT");
   } else if (!strcmp(command, "UTURN_L") || !strcmp(command, "UL")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, -180.0f, true, 4000))
       sendStatus("OK UTURN LEFT");
   } else if (!strcmp(command, "UTURN_R") || !strcmp(command, "UR")) {
+    driveMode = MODE_MANUAL;
     if (beginAction(CRUISE_ANGLE, 180.0f, true, 4000))
       sendStatus("OK UTURN RIGHT");
   } else if (!strncmp(command, "DIST=", 5)) {
